@@ -46,7 +46,7 @@ L'app è installabile come **PWA (Progressive Web App)** e funziona completament
 
 - `PORT`: Porta del server locale (default: 3000)
 - `JWT_SECRET`: Chiave segreta per JWT (default: 'meeq-secret-key-2024-super-secure')
-- `CENTRAL_SERVER_URL`: URL del server centrale (default: 'http://128.140.84.82:3001')
+- `CENTRAL_SERVER_URL`: URL del server centrale (default: 'http://128.140.84.82:3001', in produzione: 'https://app.meeq.it')
 - `VENUE_API_KEY`: API Key del locale per autenticazione con server centrale
 - `USE_CENTRAL_SERVER`: Abilita/disabilita integrazione server centrale (default: true)
 - `VAPID_PUBLIC_KEY`: Chiave pubblica VAPID per notifiche push
@@ -54,7 +54,7 @@ L'app è installabile come **PWA (Progressive Web App)** e funziona completament
 
 #### Server Centrale (`central-server.js`)
 
-- `PORT`: Porta del server centrale (default: 3001, attualmente 3002)
+- `PORT`: Porta del server centrale (default: 3001 per sviluppo, 3002 in produzione)
 - `JWT_SECRET`: Chiave segreta per JWT centrale
 - `ADMIN_USERNAME`: Username admin dashboard (default: 'admin')
 - `ADMIN_PASSWORD`: Password admin dashboard
