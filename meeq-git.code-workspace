@@ -1,0 +1,52 @@
+{
+	"folders": [
+		{
+			"name": "🖥️ Meeq Local (Raspberry Pi)",
+			"path": "meeq-local"
+		},
+		{
+			"name": "☁️ Meeq Central (VPS)",
+			"path": "meeq-central"
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.git": false,
+			"**/node_modules": true,
+			"**/backups": false,
+			"**/*.backup": false,
+			"**/*.BACKUP": false,
+			"**/*.old": false,
+			"**/*.OLD": false,
+			"**/*.vecchio": false,
+			"**/*.VECCHIO": false,
+			"**/*.log": false,
+			"**/*.db": false
+		},
+		"files.watcherExclude": {
+			"**/node_modules/**": true,
+			"**/.git/**": true,
+			"**/backups/**": true
+		},
+		"search.exclude": {
+			"**/node_modules": true,
+			"**/backups": true,
+			"**/*.backup": true,
+			"**/*.db": true
+		},
+		"git.enabled": true,
+		"git.autofetch": true,
+		"git.confirmSync": false,
+		"editor.formatOnSave": true,
+		"files.autoSave": "afterDelay",
+		"files.autoSaveDelay": 1000
+	},
+	"extensions": {
+		"recommendations": [
+			"eamodio.gitlens",
+			"dbaeumer.vscode-eslint",
+			"ms-vscode.vscode-typescript-next"
+		]
+	}
+}
+
