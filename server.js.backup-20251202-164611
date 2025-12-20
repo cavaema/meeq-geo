@@ -1,0 +1,2023 @@
+// ============================================================================
+// MEEQ SERVER - Versione Completa con Tutte le Modifiche
+// ============================================================================
+// - MOD 1: Gender selection con badge colorati
+// - MOD 2: Campo distinctive_sign opzionale
+// - MOD 3: Messaggi visibili prima dell'accettazione
+// - MOD 4: Separazione rivelazione tavolo/nome
+// - MOD 5: Sistema segnalazione utenti
+// - MOD 6: Backup automatico 30 giorni
+// - MOD 7: Reset giornaliero 4 AM
+// ============================================================================
+
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const path = require('path');
+const fs = require('fs');
+const schedule = require('node-schedule');
+const { exec } = require('child_process');
+
+const app = express();
+const PORT = 3000;
+const JWT_SECRET = 'meeq-secret-key-2024-super-secure';
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'meeq2024';
+
+// Middleware
+app.use(express.json());
+app.use(express.static('public'));
+
+// ============================================================================
+// CONFIGURAZIONE EMAIL
+// ============================================================================
+const transporter = nodemailer.createTransport({
+  host: 'authsmtp.securemail.pro',
+  port: 587,
+  secure: false,
+  auth: {
+    user: 'info@meeq.it',
+    pass: 'Flw25mq!'
+  }
+});
+
+// Serve admin.html alla root /admin
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// ============================================================================
+// DATABASE
+// ============================================================================
+const db = new sqlite3.Database('./chat.db', (err) => {
+  if (err) {
+    console.error('Errore connessione database:', err);
+  } else {
+    console.log('✅ Database connesso');
+    initDatabase();
+  }
+});
+
+function initDatabase() {
+  db.serialize(() => {
+    // Tabella users con gender e distinctive_sign
+    db.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        nome TEXT NOT NULL,
+        cognome TEXT NOT NULL,
+        gender TEXT DEFAULT 'other',
+        distinctive_sign TEXT,
+        tavolo TEXT,
+        logged_in INTEGER DEFAULT 0,
+        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+        newsletter INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Tabella pending_registrations con gender e distinctive_sign
+    db.run(`
+      CREATE TABLE IF NOT EXISTS pending_registrations (
+        email TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        cognome TEXT NOT NULL,
+        gender TEXT DEFAULT 'other',
+        distinctive_sign TEXT,
+        pin TEXT NOT NULL,
+        newsletter INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Tabella rooms (tavoli)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS rooms (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT
+      )
+    `);
+
+    // Tabella messages
+    db.run(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL,
+        sender_id INTEGER NOT NULL,
+        recipient_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+        FOREIGN KEY (sender_id) REFERENCES users(id),
+        FOREIGN KEY (recipient_id) REFERENCES users(id)
+      )
+    `);
+
+    // Tabella conversations con separazione rivelazione tavolo/nome
+    db.run(`
+      CREATE TABLE IF NOT EXISTS conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user1_id INTEGER NOT NULL,
+        user2_id INTEGER NOT NULL,
+        status TEXT DEFAULT 'pending',
+        user1_revealed INTEGER DEFAULT 0,
+        user2_revealed INTEGER DEFAULT 0,
+        user1_table_revealed INTEGER DEFAULT 0,
+        user2_table_revealed INTEGER DEFAULT 0,
+        user1_name_revealed INTEGER DEFAULT 0,
+        user2_name_revealed INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user1_id) REFERENCES users(id),
+        FOREIGN KEY (user2_id) REFERENCES users(id)
+      )
+    `);
+
+    // Tabella reports (segnalazioni)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reporter_id INTEGER NOT NULL,
+        reported_user_id INTEGER NOT NULL,
+        conversation_id INTEGER,
+        reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'pending',
+        reviewed_at DATETIME,
+        reviewed_by TEXT,
+        notes TEXT,
+        FOREIGN KEY (reporter_id) REFERENCES users(id),
+        FOREIGN KEY (reported_user_id) REFERENCES users(id),
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+      )
+    `);
+
+    // 🆕 Tabella per blocchi temporanei (reset giornaliero alle 4 AM)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS blocked_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        blocked_user_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        reason TEXT DEFAULT 'rejected_conversation',
+        UNIQUE(user_id, blocked_user_id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (blocked_user_id) REFERENCES users(id)
+      )
+    `);
+
+    // Crea 30 tavoli
+    const createTablesStmt = db.prepare('INSERT OR IGNORE INTO rooms (id, name, description) VALUES (?, ?, ?)');
+    for (let i = 1; i <= 30; i++) {
+      createTablesStmt.run(`tavolo-${i}`, `Tavolo ${i}`, `Tavolo numero ${i}`);
+    }
+    createTablesStmt.finalize();
+
+    console.log('✅ Tabelle database inizializzate');
+  });
+}
+
+// ============================================================================
+// SISTEMA BACKUP AUTOMATICO (30 GIORNI)
+// ============================================================================
+const BACKUP_DIR = path.join(__dirname, 'backups');
+
+// Crea cartella backup se non esiste
+if (!fs.existsSync(BACKUP_DIR)) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  console.log('📁 Cartella backup creata:', BACKUP_DIR);
+}
+
+function createBackup() {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+  const backupFile = path.join(BACKUP_DIR, `chat-${timestamp}.db`);
+  const backupGz = `${backupFile}.gz`;
+
+  return new Promise((resolve, reject) => {
+    // Copia database
+    fs.copyFile('./chat.db', backupFile, (err) => {
+      if (err) {
+        console.error('❌ Errore creazione backup:', err);
+        return reject(err);
+      }
+
+      // Comprimi con gzip
+      exec(`gzip "${backupFile}"`, (error) => {
+        if (error) {
+          console.error('❌ Errore compressione backup:', error);
+          return reject(error);
+        }
+
+        console.log(`✅ Backup creato: ${backupGz}`);
+
+        // Pulizia backup vecchi (> 30 giorni)
+        cleanOldBackups();
+        resolve(backupGz);
+      });
+    });
+  });
+}
+
+function cleanOldBackups() {
+  const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+
+  fs.readdir(BACKUP_DIR, (err, files) => {
+    if (err) return;
+
+    files.forEach(file => {
+      const filePath = path.join(BACKUP_DIR, file);
+      fs.stat(filePath, (err, stats) => {
+        if (err) return;
+
+        if (stats.mtimeMs < thirtyDaysAgo) {
+          fs.unlink(filePath, (err) => {
+            if (!err) {
+              console.log(`🗑️ Backup vecchio eliminato: ${file}`);
+            }
+          });
+        }
+      });
+    });
+  });
+}
+
+// ============================================================================
+// RESET GIORNALIERO 4 AM
+// ============================================================================
+function resetDaily() {
+  console.log('🔄 Inizio reset giornaliero...');
+
+  // 1. Crea backup PRIMA del reset
+  createBackup()
+    .then(() => {
+      console.log('✅ Backup pre-reset completato');
+
+      // 2. Cancella messaggi e conversazioni
+      db.run('DELETE FROM messages', (err) => {
+        if (err) console.error('Errore cancellazione messaggi:', err);
+        else console.log('✅ Messaggi cancellati');
+      });
+
+      db.run('DELETE FROM conversations', (err) => {
+        if (err) console.error('Errore cancellazione conversazioni:', err);
+        else console.log('✅ Conversazioni cancellate');
+      });
+
+      // 🆕 3. Cancella blocchi temporanei
+      db.run('DELETE FROM blocked_users', (err) => {
+        if (err) console.error('Errore cancellazione blocchi:', err);
+        else console.log('✅ Blocchi utenti cancellati');
+      });
+
+      // 4. Logout tutti gli utenti
+      db.run('UPDATE users SET logged_in = 0, tavolo = NULL', (err) => {
+        if (err) console.error('Errore logout utenti:', err);
+        else console.log('✅ Tutti gli utenti scollegati');
+      });
+
+      // 5. Ottimizza database
+      db.run('VACUUM', (err) => {
+        if (err) console.error('Errore VACUUM:', err);
+        else console.log('✅ Database ottimizzato');
+      });
+
+      console.log('✅ Reset giornaliero completato');
+    })
+    .catch(err => {
+      console.error('❌ Errore durante backup pre-reset:', err);
+    });
+}
+
+// Schedula reset alle 4:00 AM ogni giorno
+schedule.scheduleJob('0 4 * * *', resetDaily);
+console.log('⏰ Reset giornaliero schedulato per le 4:00 AM');
+
+// ============================================================================
+// MIDDLEWARE AUTENTICAZIONE
+// ============================================================================
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Token mancante' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Token non valido' });
+    }
+    req.user = user;
+    next();
+  });
+}
+
+function authenticateAdminJWT(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Token admin mancante' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err || !decoded.isAdmin) {
+      return res.status(403).json({ error: 'Accesso negato' });
+    }
+    req.admin = decoded;
+    next();
+  });
+}
+
+// Middleware aggiornamento last_activity
+function updateActivity(req, res, next) {
+  if (req.user && req.user.userId) {
+    db.run(
+      'UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE id = ?',
+      [req.user.userId],
+      (err) => {
+        if (err) console.error('Errore aggiornamento last_activity:', err);
+      }
+    );
+  }
+  next();
+}
+
+// ============================================================================
+// FUNZIONI UTILITY
+// ============================================================================
+function generatePIN() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function sendPINEmail(email, pin, nome) {
+  const mailOptions = {
+    from: 'Meeq <info@meeq.it>',
+    to: email,
+    subject: 'Il tuo PIN per accedere a Meeq',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 36px;">Meeq</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Connetti. Scopri. Gioca.</p>
+        </div>
+        <div style="background: #f5f5f5; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; color: #333;">Ciao ${nome}!</p>
+          <p style="font-size: 16px; color: #333;">Il tuo PIN per accedere a Meeq è:</p>
+          <div style="background: white; padding: 20px; text-align: center; border-radius: 10px; margin: 20px 0;">
+            <span style="font-size: 36px; font-weight: bold; color: #E91E8C; letter-spacing: 5px;">${pin}</span>
+          </div>
+          <p style="font-size: 14px; color: #666;">Questo PIN è valido per 24 ore.</p>
+          <p style="font-size: 14px; color: #666;">Se non hai richiesto questo PIN, ignora questa email.</p>
+          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-top: 20px; border-radius: 5px;">
+            <p style="font-size: 14px; color: #856404; margin: 0;">
+              <strong>⚠️ IMPORTANTE:</strong> Se non vedi questa email nella tua casella principale, 
+              <strong>controlla anche la cartella SPAM/POSTA INDESIDERATA</strong>.
+            </p>
+          </div>
+        </div>
+      </div>
+    `
+  };
+
+  return transporter.sendMail(mailOptions);
+}
+
+async function sendReportEmail(reportData) {
+  const mailOptions = {
+    from: 'Meeq System <info@meeq.it>',
+    to: 'info@meeq.it',
+    subject: `⚠️ Nuova Segnalazione Utente - ID ${reportData.id}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #dc3545; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0;">⚠️ Nuova Segnalazione</h1>
+        </div>
+        <div style="background: #f5f5f5; padding: 30px; border-radius: 0 0 10px 10px;">
+          <h2 style="color: #333; margin-top: 0;">Dettagli Segnalazione</h2>
+          
+          <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+            <p style="margin: 5px 0;"><strong>ID Segnalazione:</strong> ${reportData.id}</p>
+            <p style="margin: 5px 0;"><strong>Data:</strong> ${new Date(reportData.created_at).toLocaleString('it-IT')}</p>
+            <p style="margin: 5px 0;"><strong>ID Conversazione:</strong> ${reportData.conversation_id || 'N/A'}</p>
+          </div>
+
+          <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+            <h3 style="color: #E91E8C; margin-top: 0;">Utente Segnalante</h3>
+            <p style="margin: 5px 0;"><strong>ID:</strong> ${reportData.reporter_id}</p>
+            <p style="margin: 5px 0;"><strong>Nome:</strong> ${reportData.reporter_name}</p>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${reportData.reporter_email}</p>
+          </div>
+
+          <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+            <h3 style="color: #dc3545; margin-top: 0;">Utente Segnalato</h3>
+            <p style="margin: 5px 0;"><strong>ID:</strong> ${reportData.reported_user_id}</p>
+            <p style="margin: 5px 0;"><strong>Nome:</strong> ${reportData.reported_user_name}</p>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${reportData.reported_user_email}</p>
+            <p style="margin: 5px 0;"><strong>Tavolo:</strong> ${reportData.reported_user_table || 'N/A'}</p>
+          </div>
+
+          ${reportData.reason ? `
+          <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0;">
+            <h3 style="color: #333; margin-top: 0;">Motivo</h3>
+            <p style="margin: 0; color: #666;">${reportData.reason}</p>
+          </div>
+          ` : ''}
+
+          <div style="text-align: center; margin-top: 20px;">
+            <a href="http://172.16.0.10:3000/admin" 
+               style="display: inline-block; background: #E91E8C; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+              Vai al Pannello Admin
+            </a>
+          </div>
+        </div>
+      </div>
+    `
+  };
+
+  return transporter.sendMail(mailOptions);
+}
+
+// ============================================================================
+// API ENDPOINTS - AUTENTICAZIONE
+// ============================================================================
+
+// Check email
+app.post('/api/check-email', (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email richiesta' });
+  }
+
+  // Cerca utente esistente
+  db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+    if (err) {
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    if (user) {
+      // Utente esiste - genera nuovo PIN
+      const pin = generatePIN();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // Rimuovi vecchie pending registrations per questa email
+      db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
+
+      // Inserisci nuova pending registration
+      db.run(
+        'INSERT INTO pending_registrations (email, nome, cognome, gender, distinctive_sign, pin, newsletter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [user.email, user.nome, user.cognome, user.gender, user.distinctive_sign, pin, user.newsletter, new Date().toISOString()],
+        (err) => {
+          if (err) {
+            console.error('Errore creazione pending registration:', err);
+            return res.status(500).json({ error: 'Errore server' });
+          }
+
+          // Invia PIN via email
+          sendPINEmail(email, pin, user.nome)
+            .then(() => {
+              console.log(`📧 PIN inviato a ${email}`);
+              res.json({ exists: true, requiresRegistration: false });
+            })
+            .catch(error => {
+              console.error('Errore invio email:', error);
+              res.status(500).json({ error: 'Errore invio email' });
+            });
+        }
+      );
+    } else {
+      // Utente non esiste
+      res.json({ exists: false, requiresRegistration: true });
+    }
+  });
+});
+
+// Register
+app.post('/api/register', (req, res) => {
+  const { email, nome, cognome, gender, distinctive_sign, newsletter } = req.body;
+
+  if (!email || !nome || !cognome || !gender) {
+    return res.status(400).json({ error: 'Dati incompleti' });
+  }
+
+  // Verifica se email già esiste
+  db.get('SELECT * FROM users WHERE email = ?', [email], (err, existingUser) => {
+    if (err) {
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email già registrata' });
+    }
+
+    // Genera PIN
+    const pin = generatePIN();
+
+    // Rimuovi vecchie pending registrations
+    db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
+
+    // Inserisci pending registration
+    db.run(
+      'INSERT INTO pending_registrations (email, nome, cognome, gender, distinctive_sign, pin, newsletter) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [email, nome, cognome, gender, distinctive_sign || null, pin, newsletter ? 1 : 0],
+      (err) => {
+        if (err) {
+          console.error('Errore inserimento pending registration:', err);
+          return res.status(500).json({ error: 'Errore registrazione' });
+        }
+
+        // Invia PIN via email
+        sendPINEmail(email, pin, nome)
+          .then(() => {
+            console.log(`📧 PIN registrazione inviato a ${email}`);
+            res.json({ success: true, message: 'PIN inviato via email' });
+          })
+          .catch(error => {
+            console.error('Errore invio email:', error);
+            res.status(500).json({ error: 'Errore invio email' });
+          });
+      }
+    );
+  });
+});
+
+// Verify PIN
+app.post('/api/verify-pin', (req, res) => {
+  const { email, pin, distinctive_sign } = req.body;
+
+  if (!email || !pin) {
+    return res.status(400).json({ error: 'Email e PIN richiesti' });
+  }
+
+  // Cerca pending registration
+  db.get(
+    'SELECT * FROM pending_registrations WHERE email = ? AND pin = ?',
+    [email, pin],
+    (err, pending) => {
+      if (err) {
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!pending) {
+        return res.status(400).json({ error: 'PIN non valido' });
+      }
+
+      // Verifica scadenza (24 ore)
+      const createdAt = new Date(pending.created_at);
+      const now = new Date();
+      const diffHours = (now - createdAt) / (1000 * 60 * 60);
+
+      if (diffHours > 24) {
+        db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
+        return res.status(400).json({ error: 'PIN scaduto' });
+      }
+
+      // Aggiorna distinctive_sign se fornito
+      const finalDistinctiveSign = distinctive_sign || pending.distinctive_sign;
+
+      // Cerca utente esistente
+      db.get('SELECT * FROM users WHERE email = ?', [email], (err, existingUser) => {
+        if (err) {
+          return res.status(500).json({ error: 'Errore database' });
+        }
+
+        if (existingUser) {
+          // Login utente esistente
+          // Aggiorna distinctive_sign se fornito
+          if (finalDistinctiveSign) {
+            db.run(
+              'UPDATE users SET distinctive_sign = ?, logged_in = 1, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
+              [finalDistinctiveSign, existingUser.id]
+            );
+          } else {
+            db.run(
+              'UPDATE users SET logged_in = 1, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
+              [existingUser.id]
+            );
+          }
+
+          // Genera token
+          const token = jwt.sign(
+            { userId: existingUser.id, email: existingUser.email },
+            JWT_SECRET,
+            { expiresIn: '48h' }
+          );
+
+          // Cancella pending registration
+          db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
+
+          console.log(`✅ Login utente esistente: ${existingUser.nome} ${existingUser.cognome}`);
+
+          res.json({
+            success: true,
+            token,
+            user: {
+              id: existingUser.id,
+              email: existingUser.email,
+              nome: existingUser.nome,
+              cognome: existingUser.cognome,
+              gender: existingUser.gender,
+              distinctive_sign: finalDistinctiveSign || existingUser.distinctive_sign,
+              tavolo: existingUser.tavolo
+            }
+          });
+        } else {
+          // Registra nuovo utente
+          db.run(
+            'INSERT INTO users (email, nome, cognome, gender, distinctive_sign, newsletter, logged_in, last_activity) VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)',
+            [pending.email, pending.nome, pending.cognome, pending.gender, finalDistinctiveSign, pending.newsletter],
+            function (err) {
+              if (err) {
+                console.error('Errore creazione utente:', err);
+                return res.status(500).json({ error: 'Errore creazione account' });
+              }
+
+              const newUserId = this.lastID;
+
+              // Genera token
+              const token = jwt.sign(
+                { userId: newUserId, email: pending.email },
+                JWT_SECRET,
+                { expiresIn: '48h' }
+              );
+
+              // Cancella pending registration
+              db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
+
+              console.log(`✅ Nuovo utente registrato: ${pending.nome} ${pending.cognome}`);
+
+              res.json({
+                success: true,
+                token,
+                user: {
+                  id: newUserId,
+                  email: pending.email,
+                  nome: pending.nome,
+                  cognome: pending.cognome,
+                  gender: pending.gender,
+                  distinctive_sign: finalDistinctiveSign,
+                  tavolo: null
+                }
+              });
+            }
+          );
+        }
+      });
+    }
+  );
+});
+
+// ============================================================================
+// API ENDPOINTS - UTENTE
+// ============================================================================
+
+// Verifica token
+app.get('/api/verify-token', authenticateToken, (req, res) => {
+  res.json({ valid: true, userId: req.user.userId });
+});
+
+// Seleziona tavolo
+app.post('/api/select-table', authenticateToken, (req, res) => {
+  const { tavolo } = req.body;
+  const userId = req.user.userId;
+
+  if (!tavolo) {
+    return res.status(400).json({ error: 'Tavolo non specificato' });
+  }
+
+  db.run(
+    'UPDATE users SET tavolo = ?, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
+    [tavolo, userId],
+    function (err) {
+      if (err) {
+        console.error('Errore selezione tavolo:', err);
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      console.log(`🪑 Utente ${userId} assegnato a ${tavolo}`);
+      res.json({ success: true, tavolo });
+    }
+  );
+});
+
+// Aggiorna tavolo
+app.post('/api/update-table', authenticateToken, (req, res) => {
+  const { tavolo } = req.body;
+  const userId = req.user.userId;
+
+  if (!tavolo) {
+    return res.status(400).json({ error: 'Tavolo non specificato' });
+  }
+
+  db.run(
+    'UPDATE users SET tavolo = ?, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
+    [tavolo, userId],
+    function (err) {
+      if (err) {
+        console.error('Errore aggiornamento tavolo:', err);
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      console.log(`🔄 Utente ${userId} spostato a ${tavolo}`);
+      res.json({ success: true, tavolo });
+    }
+  );
+});
+
+// Logout
+app.post('/api/logout', authenticateToken, (req, res) => {
+  db.run(
+    'UPDATE users SET logged_in = 0, tavolo = NULL WHERE id = ?',
+    [req.user.userId],
+    (err) => {
+      if (err) {
+        console.error('Errore logout:', err);
+        return res.status(500).json({ error: 'Errore server' });
+      }
+
+      console.log(`👋 Utente disconnesso: ID ${req.user.userId}`);
+      res.json({ message: 'Logout effettuato' });
+    }
+  );
+});
+
+// ============================================================================
+// API ENDPOINTS - TAVOLI E UTENTI
+// ============================================================================
+
+// Lista tavoli attivi (con utenti online)
+app.get('/api/tables/active', authenticateToken, (req, res) => {
+  const query = `
+    SELECT 
+      r.id as room_id,
+      r.name as room_name,
+      r.description,
+      GROUP_CONCAT(u.id) as user_ids,
+      GROUP_CONCAT(u.nome) as user_names,
+      GROUP_CONCAT(u.gender) as user_genders,
+      GROUP_CONCAT(u.distinctive_sign) as user_signs,
+      COUNT(CASE WHEN u.id IS NOT NULL THEN 1 END) as user_count
+    FROM rooms r
+    LEFT JOIN users u ON u.tavolo = r.id 
+      AND u.logged_in = 1 
+      AND u.id != ?
+      AND datetime(u.last_activity, '+30 minutes') > datetime('now')
+    GROUP BY r.id, r.name, r.description
+    HAVING user_count > 0
+    ORDER BY user_count DESC, r.name
+  `;
+
+  db.all(query, [req.user.userId], (err, rows) => {
+    if (err) {
+      console.error('Errore query tavoli attivi:', err);
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    const tables = rows.map(row => {
+      const ids = row.user_ids ? row.user_ids.split(',') : [];
+      const names = row.user_names ? row.user_names.split(',') : [];
+      const genders = row.user_genders ? row.user_genders.split(',') : [];
+      const signs = row.user_signs ? row.user_signs.split(',') : [];
+
+      return {
+        id: row.room_id,
+        name: row.room_name,
+        description: row.description,
+        userCount: row.user_count,
+        users: ids.map((id, index) => ({
+          id: parseInt(id),
+          nome: names[index],
+          gender: genders[index] || 'other',
+          distinctive_sign: signs[index] || null
+        }))
+      };
+    });
+
+    res.json(tables);
+  });
+});
+
+// 🆕 Lista utenti (per un tavolo specifico o tutti gli utenti online)
+app.get('/api/users', authenticateToken, (req, res) => {
+  const { tableId } = req.query;
+  const currentUserId = req.user.userId;
+
+  let query = `
+    SELECT 
+      u.id,
+      u.nome,
+      u.cognome,
+      u.gender,
+      u.distinctive_sign,
+      u.tavolo,
+      u.last_activity
+    FROM users u
+    WHERE u.logged_in = 1
+      AND u.id != ?
+      AND datetime(u.last_activity, '+30 minutes') > datetime('now')
+  `;
+
+  const params = [currentUserId];
+
+  if (tableId) {
+    query += ' AND u.tavolo = ?';
+    params.push(tableId);
+  }
+
+  query += ' ORDER BY u.last_activity DESC';
+
+  db.all(query, params, (err, users) => {
+    if (err) {
+      console.error('Errore query utenti:', err);
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    const formattedUsers = users.map(user => ({
+      id: user.id,
+      nome: user.nome,
+      cognome: user.cognome,
+      gender: user.gender,
+      distinctive_sign: user.distinctive_sign,
+      tavolo: user.tavolo,
+      lastActivity: user.last_activity
+    }));
+
+    res.json(formattedUsers);
+  });
+});
+
+// 🆕 Lista utenti di un tavolo specifico (formato alternativo per compatibilità frontend)
+app.get('/api/table/:tableId/users', authenticateToken, (req, res) => {
+  const { tableId } = req.params;
+  const currentUserId = req.user.userId;
+
+  const query = `
+    SELECT 
+      u.id,
+      u.nome,
+      u.cognome,
+      u.gender,
+      u.distinctive_sign,
+      u.tavolo,
+      u.last_activity
+    FROM users u
+    WHERE u.logged_in = 1
+      AND u.id != ?
+      AND u.tavolo = ?
+      AND datetime(u.last_activity, '+30 minutes') > datetime('now')
+    ORDER BY u.last_activity DESC
+  `;
+
+  db.all(query, [currentUserId, tableId], (err, users) => {
+    if (err) {
+      console.error('Errore query utenti tavolo:', err);
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    const formattedUsers = users.map(user => ({
+      id: user.id,
+      nome: user.nome,
+      cognome: user.cognome,
+      gender: user.gender,
+      distinctive_sign: user.distinctive_sign,
+      tavolo: user.tavolo,
+      lastActivity: user.last_activity
+    }));
+
+    res.json(formattedUsers);
+  });
+});
+
+// ============================================================================
+// API ENDPOINTS - CONVERSAZIONI
+// ============================================================================
+
+// Lista conversazioni dell'utente
+app.get('/api/conversations', authenticateToken, (req, res) => {
+  const userId = req.user.userId;
+
+  const query = `
+    SELECT 
+      c.id,
+      c.status,
+      c.user1_id,
+      c.user2_id,
+      c.initiator_id,
+      c.user1_revealed,
+      c.user2_revealed,
+      c.user1_table_revealed,
+      c.user2_table_revealed,
+      c.user1_name_revealed,
+      c.user2_name_revealed,
+      c.created_at,
+      c.updated_at,
+      u1.nome as user1_nome,
+      u1.cognome as user1_cognome,
+      u1.gender as user1_gender,
+      u1.distinctive_sign as user1_sign,
+      u1.tavolo as user1_tavolo,
+      u2.nome as user2_nome,
+      u2.cognome as user2_cognome,
+      u2.gender as user2_gender,
+      u2.distinctive_sign as user2_sign,
+      u2.tavolo as user2_tavolo,
+      (SELECT COUNT(*) FROM messages m 
+       WHERE m.conversation_id = c.id 
+       AND m.recipient_id = ?
+       AND m.is_read = 0) as unread_count
+    FROM conversations c
+    LEFT JOIN users u1 ON c.user1_id = u1.id
+    LEFT JOIN users u2 ON c.user2_id = u2.id
+    WHERE c.user1_id = ? OR c.user2_id = ?
+    ORDER BY c.updated_at DESC
+  `;
+
+  db.all(query, [userId, userId, userId], (err, conversations) => {
+    if (err) {
+      console.error('Errore recupero conversazioni:', err);
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    // ✅ Ritorna sempre un array, anche se vuoto
+    if (!conversations || conversations.length === 0) {
+      return res.json([]);
+    }
+
+    const formattedConversations = conversations.map(conv => {
+      const isUser1 = conv.user1_id === userId;
+      const otherUser = isUser1 ? {
+        id: conv.user2_id,
+        nome: conv.user2_nome,
+        cognome: conv.user2_cognome,
+        gender: conv.user2_gender,
+        distinctive_sign: conv.user2_sign,
+        tavolo: conv.user2_tavolo
+      } : {
+        id: conv.user1_id,
+        nome: conv.user1_nome,
+        cognome: conv.user1_cognome,
+        gender: conv.user1_gender,
+        distinctive_sign: conv.user1_sign,
+        tavolo: conv.user1_tavolo
+      };
+
+      const myRevealed = isUser1 ? {
+        name: conv.user1_name_revealed === 1,
+        table: conv.user1_table_revealed === 1
+      } : {
+        name: conv.user2_name_revealed === 1,
+        table: conv.user2_table_revealed === 1
+      };
+
+      const theirRevealed = isUser1 ? {
+        name: conv.user2_name_revealed === 1,
+        table: conv.user2_table_revealed === 1
+      } : {
+        name: conv.user1_name_revealed === 1,
+        table: conv.user1_table_revealed === 1
+      };
+
+      return {
+        id: conv.id,
+        status: conv.status,
+        user1_id: conv.user1_id,
+        user2_id: conv.user2_id,
+        initiator_id: conv.initiator_id,
+        user1_name_revealed: conv.user1_name_revealed === 1,
+        user2_name_revealed: conv.user2_name_revealed === 1,
+        user1_table_revealed: conv.user1_table_revealed === 1,
+        user2_table_revealed: conv.user2_table_revealed === 1,
+	otherUser: otherUser,
+        myRevealed: myRevealed,
+        theirRevealed: theirRevealed,
+        unreadCount: conv.unread_count || 0,
+        created_at: conv.created_at,
+        updated_at: conv.updated_at
+      };
+    });
+
+    res.json(formattedConversations);
+  });
+});
+
+// 🆕 Dettagli conversazione singola
+app.get('/api/conversations/:conversationId', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user.userId;
+
+  const query = `
+    SELECT 
+      c.id,
+      c.status,
+      c.user1_id,
+      c.user2_id,
+      c.initiator_id,
+      c.user1_revealed,
+      c.user2_revealed,
+      c.user1_table_revealed,
+      c.user2_table_revealed,
+      c.user1_name_revealed,
+      c.user2_name_revealed,
+      c.created_at,
+      c.updated_at,
+      u1.nome as user1_nome,
+      u1.cognome as user1_cognome,
+      u1.gender as user1_gender,
+      u1.distinctive_sign as user1_sign,
+      u1.tavolo as user1_tavolo,
+      u2.nome as user2_nome,
+      u2.cognome as user2_cognome,
+      u2.gender as user2_gender,
+      u2.distinctive_sign as user2_sign,
+      u2.tavolo as user2_tavolo
+    FROM conversations c
+    LEFT JOIN users u1 ON c.user1_id = u1.id
+    LEFT JOIN users u2 ON c.user2_id = u2.id
+    WHERE c.id = ? AND (c.user1_id = ? OR c.user2_id = ?)
+  `;
+
+  db.get(query, [conversationId, userId, userId], (err, conv) => {
+    if (err) {
+      console.error('Errore recupero conversazione:', err);
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    if (!conv) {
+      return res.status(404).json({ error: 'Conversazione non trovata' });
+    }
+
+    const isUser1 = conv.user1_id === userId;
+    const otherUser = isUser1 ? {
+      id: conv.user2_id,
+      nome: conv.user2_nome,
+      cognome: conv.user2_cognome,
+      gender: conv.user2_gender,
+      distinctive_sign: conv.user2_sign,
+      tavolo: conv.user2_tavolo
+    } : {
+      id: conv.user1_id,
+      nome: conv.user1_nome,
+      cognome: conv.user1_cognome,
+      gender: conv.user1_gender,
+      distinctive_sign: conv.user1_sign,
+      tavolo: conv.user1_tavolo
+    };
+
+    const myRevealed = isUser1 ? {
+      name: conv.user1_name_revealed === 1,
+      table: conv.user1_table_revealed === 1
+    } : {
+      name: conv.user2_name_revealed === 1,
+      table: conv.user2_table_revealed === 1
+    };
+
+    const theirRevealed = isUser1 ? {
+      name: conv.user2_name_revealed === 1,
+      table: conv.user2_table_revealed === 1
+    } : {
+      name: conv.user1_name_revealed === 1,
+      table: conv.user1_table_revealed === 1
+    };
+
+    res.json({
+      conversation: {
+        id: conv.id,
+        status: conv.status,
+        user1_id: conv.user1_id,
+        user2_id: conv.user2_id,
+        user1_name: conv.user1_nome,
+        user1_table: conv.user1_tavolo,
+        user1_gender: conv.user1_gender,
+        user1_distinctive_sign: conv.user1_sign,
+        user1_name_revealed: conv.user1_name_revealed === 1,
+        user1_table_revealed: conv.user1_table_revealed === 1,
+        user2_name: conv.user2_nome,
+        user2_table: conv.user2_tavolo,
+        user2_gender: conv.user2_gender,
+        user2_distinctive_sign: conv.user2_sign,
+        user2_name_revealed: conv.user2_name_revealed === 1,
+        user2_table_revealed: conv.user2_table_revealed === 1,
+        otherUser: otherUser,
+        myRevealed: myRevealed,
+        theirRevealed: theirRevealed,
+        created_at: conv.created_at,
+        updated_at: conv.updated_at
+      }
+    });
+  });
+});
+
+// Crea nuova conversazione
+app.post('/api/conversations', authenticateToken, (req, res) => {
+  const { recipientId } = req.body;
+  const userId = req.user.userId;
+
+  if (!recipientId) {
+    return res.status(400).json({ error: 'ID destinatario richiesto' });
+  }
+
+  if (recipientId === userId) {
+    return res.status(400).json({ error: 'Non puoi chattare con te stesso' });
+  }
+
+  // 🆕 CONTROLLA SE C'È UN BLOCCO ATTIVO
+  db.get(
+    `SELECT * FROM blocked_users 
+     WHERE (user_id = ? AND blocked_user_id = ?) 
+        OR (user_id = ? AND blocked_user_id = ?)`,
+    [userId, recipientId, recipientId, userId],
+    (err, block) => {
+      if (err) {
+        console.error('Errore controllo blocco:', err);
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (block) {
+        console.log(`🚫 Tentativo conversazione bloccato: User ${userId} con User ${recipientId}`);
+        return res.status(403).json({ 
+          error: 'Impossibile avviare conversazione',
+          message: 'Questo utente ha rifiutato la tua richiesta di conversazione. Potrai riprovare dopo il reset giornaliero.' 
+        });
+      }
+
+      // Verifica se esiste già una conversazione
+      db.get(
+        `SELECT * FROM conversations 
+         WHERE (user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)`,
+        [userId, recipientId, recipientId, userId],
+        (err, existingConv) => {
+          if (err) {
+            console.error('Errore verifica conversazione:', err);
+            return res.status(500).json({ error: 'Errore database' });
+          }
+
+          if (existingConv) {
+            // Conversazione esiste già
+            return res.json({
+              success: true,
+              conversationId: existingConv.id,
+              status: existingConv.status,
+              message: 'Conversazione già esistente'
+            });
+          }
+
+          // Crea nuova conversazione
+          db.run(
+            'INSERT INTO conversations (user1_id, user2_id, status) VALUES (?, ?, ?)',
+            [userId, recipientId, 'pending'],
+            function (err) {
+              if (err) {
+                console.error('Errore creazione conversazione:', err);
+                return res.status(500).json({ error: 'Errore creazione conversazione' });
+              }
+
+              const newConvId = this.lastID;
+              console.log(`💬 Nuova conversazione creata: ${newConvId} (${userId} → ${recipientId})`);
+
+              res.json({
+                success: true,
+                conversationId: newConvId,
+                status: 'pending'
+              });
+            }
+          );
+        }
+      );
+    }
+  );
+});
+
+// Messaggi di una conversazione
+app.get('/api/conversations/:conversationId/messages', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user.userId;
+
+  // Verifica che l'utente faccia parte della conversazione
+  db.get(
+    'SELECT * FROM conversations WHERE id = ? AND (user1_id = ? OR user2_id = ?)',
+    [conversationId, userId, userId],
+    (err, conversation) => {
+      if (err) {
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversazione non trovata' });
+      }
+
+      // Recupera messaggi
+      const query = `
+        SELECT 
+          m.id,
+          m.message,
+          m.sender_id,
+          m.recipient_id,
+          m.is_read,
+          m.created_at
+        FROM messages m
+        WHERE m.conversation_id = ?
+        ORDER BY m.created_at ASC
+      `;
+
+      db.all(query, [conversationId], (err, messages) => {
+        if (err) {
+          console.error('Errore recupero messaggi:', err);
+          return res.status(500).json({ error: 'Errore database' });
+        }
+
+        // 🆕 FIX BADGE: Marca come letti quando APRI la conversazione (non quando invii)
+        db.run(
+          'UPDATE messages SET is_read = 1 WHERE conversation_id = ? AND recipient_id = ? AND is_read = 0',
+          [conversationId, userId],
+          (err) => {
+            if (err) console.error('Errore mark-read:', err);
+          }
+        );
+
+        const formattedMessages = messages.map(msg => ({
+          id: msg.id,
+          message: msg.message,
+          senderId: msg.sender_id,
+          recipientId: msg.recipient_id,
+          isMine: msg.sender_id === userId,
+          isRead: msg.is_read === 1,
+          createdAt: msg.created_at
+        }));
+
+        res.json({ messages: formattedMessages });
+      });
+    }
+  );
+});
+
+// Invia messaggio
+app.post('/api/conversations/:conversationId/messages', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const { message } = req.body;
+  const userId = req.user.userId;
+
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'Messaggio vuoto' });
+  }
+
+  // Verifica conversazione
+  db.get(
+    'SELECT * FROM conversations WHERE id = ? AND (user1_id = ? OR user2_id = ?)',
+    [conversationId, userId, userId],
+    (err, conversation) => {
+      if (err) {
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversazione non trovata' });
+      }
+
+      // Determina destinatario
+      const recipientId = conversation.user1_id === userId ? conversation.user2_id : conversation.user1_id;
+
+      // Inserisci messaggio
+      db.run(
+        'INSERT INTO messages (conversation_id, sender_id, recipient_id, message, is_read, created_at) VALUES (?, ?, ?, ?, 0, datetime("now", "localtime"))',
+        [conversationId, userId, recipientId, message.trim()],
+        function (err) {
+          if (err) {
+            console.error('Errore invio messaggio:', err);
+            return res.status(500).json({ error: 'Errore invio messaggio' });
+          }
+
+          // Aggiorna timestamp conversazione
+          db.run(
+            'UPDATE conversations SET updated_at = datetime("now", "localtime") WHERE id = ?',
+            [conversationId]
+          );
+
+          console.log(`📨 Messaggio inviato: Conv ${conversationId}, User ${userId} → ${recipientId}`);
+
+          res.json({
+            success: true,
+            messageId: this.lastID,
+            message: 'Messaggio inviato'
+          });
+        }
+      );
+    }
+  );
+});
+
+// Accetta conversazione
+app.post('/api/conversations/:conversationId/accept', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user.userId;
+
+  db.get(
+    'SELECT * FROM conversations WHERE id = ? AND user2_id = ?',
+    [conversationId, userId],
+    (err, conversation) => {
+      if (err) {
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversazione non trovata o non autorizzato' });
+      }
+
+      if (conversation.status !== 'pending') {
+        return res.status(400).json({ error: 'Conversazione già gestita' });
+      }
+
+      db.run(
+        'UPDATE conversations SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        ['accepted', conversationId],
+        (err) => {
+          if (err) {
+            console.error('Errore accettazione conversazione:', err);
+            return res.status(500).json({ error: 'Errore database' });
+          }
+
+          console.log(`✅ Conversazione ${conversationId} accettata da user ${userId}`);
+          
+          // 🆕 PROBLEMA 2: Ritorna conversazione completa aggiornata
+          const query = `
+            SELECT 
+              c.id,
+              c.status,
+              c.user1_id,
+              c.user2_id,
+      c.initiator_id,
+              c.user1_revealed,
+              c.user2_revealed,
+              c.user1_table_revealed,
+              c.user2_table_revealed,
+              c.user1_name_revealed,
+              c.user2_name_revealed,
+              c.created_at,
+              c.updated_at,
+              u1.nome as user1_nome,
+              u1.cognome as user1_cognome,
+              u1.gender as user1_gender,
+              u1.distinctive_sign as user1_sign,
+              u1.tavolo as user1_tavolo,
+              u2.nome as user2_nome,
+              u2.cognome as user2_cognome,
+              u2.gender as user2_gender,
+              u2.distinctive_sign as user2_sign,
+              u2.tavolo as user2_tavolo
+            FROM conversations c
+            LEFT JOIN users u1 ON c.user1_id = u1.id
+            LEFT JOIN users u2 ON c.user2_id = u2.id
+            WHERE c.id = ?
+          `;
+
+          db.get(query, [conversationId], (err, conv) => {
+            if (err) {
+              console.error('Errore recupero conversazione dopo accept:', err);
+              return res.status(500).json({ error: 'Errore database' });
+            }
+
+            const isUser1 = conv.user1_id === userId;
+            const otherUser = isUser1 ? {
+              id: conv.user2_id,
+              nome: conv.user2_nome,
+              cognome: conv.user2_cognome,
+              gender: conv.user2_gender,
+              distinctive_sign: conv.user2_sign,
+              tavolo: conv.user2_tavolo
+            } : {
+              id: conv.user1_id,
+              nome: conv.user1_nome,
+              cognome: conv.user1_cognome,
+              gender: conv.user1_gender,
+              distinctive_sign: conv.user1_sign,
+              tavolo: conv.user1_tavolo
+            };
+
+            const myRevealed = isUser1 ? {
+              name: conv.user1_name_revealed === 1,
+              table: conv.user1_table_revealed === 1
+            } : {
+              name: conv.user2_name_revealed === 1,
+              table: conv.user2_table_revealed === 1
+            };
+
+            const theirRevealed = isUser1 ? {
+              name: conv.user2_name_revealed === 1,
+              table: conv.user2_table_revealed === 1
+            } : {
+              name: conv.user1_name_revealed === 1,
+              table: conv.user1_table_revealed === 1
+            };
+
+            res.json({
+              success: true,
+              conversation: {
+                id: conv.id,
+                status: conv.status,
+                user1_id: conv.user1_id,
+                user2_id: conv.user2_id,
+                user1_name: conv.user1_nome,
+                user1_table: conv.user1_tavolo,
+                user1_gender: conv.user1_gender,
+                user1_distinctive_sign: conv.user1_sign,
+                user1_name_revealed: conv.user1_name_revealed === 1,
+                user1_table_revealed: conv.user1_table_revealed === 1,
+                user2_name: conv.user2_nome,
+                user2_table: conv.user2_tavolo,
+                user2_gender: conv.user2_gender,
+                user2_distinctive_sign: conv.user2_sign,
+                user2_name_revealed: conv.user2_name_revealed === 1,
+                user2_table_revealed: conv.user2_table_revealed === 1,
+                otherUser: otherUser,
+                myRevealed: myRevealed,
+                theirRevealed: theirRevealed,
+                created_at: conv.created_at,
+                updated_at: conv.updated_at
+              }
+            });
+          });
+        }
+      );
+    }
+  );
+});
+
+// Rifiuta conversazione
+app.post('/api/conversations/:conversationId/reject', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user.userId;
+
+  db.get(
+    'SELECT * FROM conversations WHERE id = ? AND user2_id = ?',
+    [conversationId, userId],
+    (err, conversation) => {
+      if (err) {
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversazione non trovata o non autorizzato' });
+      }
+
+      if (conversation.status !== 'pending') {
+        return res.status(400).json({ error: 'Conversazione già gestita' });
+      }
+
+      const initiatorId = conversation.user1_id; // Il mittente che ha iniziato la conversazione
+
+      // 🆕 CREA BLOCCO BIDIREZIONALE
+      // L'utente che rifiuta (userId) blocca il mittente (initiatorId)
+      // E il mittente viene bloccato dal destinatario
+      db.run(
+        'INSERT OR IGNORE INTO blocked_users (user_id, blocked_user_id, reason) VALUES (?, ?, ?)',
+        [userId, initiatorId, 'rejected_conversation'],
+        (blockErr) => {
+          if (blockErr) {
+            console.error('Errore creazione blocco:', blockErr);
+          } else {
+            console.log(`🚫 Blocco creato: User ${userId} ha bloccato User ${initiatorId}`);
+          }
+
+          // Blocco anche in direzione opposta per evitare nuove richieste
+          db.run(
+            'INSERT OR IGNORE INTO blocked_users (user_id, blocked_user_id, reason) VALUES (?, ?, ?)',
+            [initiatorId, userId, 'conversation_rejected_by_other'],
+            (blockErr2) => {
+              if (blockErr2) {
+                console.error('Errore creazione blocco reciproco:', blockErr2);
+              } else {
+                console.log(`🚫 Blocco reciproco creato: User ${initiatorId} bloccato da User ${userId}`);
+              }
+
+              // Elimina messaggi e conversazione
+              db.run('DELETE FROM messages WHERE conversation_id = ?', [conversationId], (delMsgErr) => {
+                if (delMsgErr) {
+                  console.error('Errore eliminazione messaggi:', delMsgErr);
+                }
+
+                db.run('DELETE FROM conversations WHERE id = ?', [conversationId], (delConvErr) => {
+                  if (delConvErr) {
+                    console.error('Errore rifiuto conversazione:', delConvErr);
+                    return res.status(500).json({ error: 'Errore database' });
+                  }
+
+                  console.log(`❌ Conversazione ${conversationId} rifiutata da user ${userId}`);
+                  
+                  // 🆕 NOTIFICA AL MITTENTE
+                  // Il frontend mostrerà un messaggio quando il mittente proverà a caricare le conversazioni
+                  res.json({ 
+                    success: true, 
+                    status: 'rejected',
+                    message: 'Conversazione rifiutata. L\'utente è stato bloccato fino al reset giornaliero.',
+                    initiatorId: initiatorId // Per permettere al frontend di notificare se necessario
+                  });
+                });
+              });
+            }
+          );
+        }
+      );
+    }
+  );
+});
+
+// Rivela nome e tavolo (vecchio endpoint, manteniamo per compatibilità)
+app.post('/api/conversations/:conversationId/reveal', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user.userId;
+
+  db.get(
+    'SELECT * FROM conversations WHERE id = ? AND (user1_id = ? OR user2_id = ?)',
+    [conversationId, userId, userId],
+    (err, conversation) => {
+      if (err) {
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversazione non trovata' });
+      }
+
+      const isUser1 = conversation.user1_id === userId;
+      const nameField = isUser1 ? 'user1_name_revealed' : 'user2_name_revealed';
+      const tableField = isUser1 ? 'user1_table_revealed' : 'user2_table_revealed';
+      const oldRevealField = isUser1 ? 'user1_revealed' : 'user2_revealed';
+
+      db.run(
+        `UPDATE conversations 
+         SET ${nameField} = 1, ${tableField} = 1, ${oldRevealField} = 1, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [conversationId],
+        (err) => {
+          if (err) {
+            console.error('Errore rivelazione:', err);
+            return res.status(500).json({ error: 'Errore database' });
+          }
+
+          console.log(`👤 User ${userId} ha rivelato nome e tavolo in conv ${conversationId}`);
+          res.json({ success: true, revealed: true });
+        }
+      );
+    }
+  );
+});
+
+// 🆕 Rivela SOLO il nome
+app.post('/api/conversations/:conversationId/reveal-name', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user.userId;
+
+  console.log(`👤 Richiesta rivelazione NOME - Conversazione: ${conversationId}, User: ${userId}`);
+
+  db.get(
+    'SELECT id, user1_id, user2_id, user1_name_revealed, user2_name_revealed FROM conversations WHERE id = ? AND (user1_id = ? OR user2_id = ?)',
+    [conversationId, userId, userId],
+    (err, conversation) => {
+      if (err) {
+        console.error('Errore verifica conversazione:', err);
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!conversation) {
+        console.log('❌ Conversazione non trovata o utente non autorizzato');
+        return res.status(404).json({ error: 'Conversazione non trovata' });
+      }
+
+      const isUser1 = conversation.user1_id === userId;
+      const nameRevealedField = isUser1 ? 'user1_name_revealed' : 'user2_name_revealed';
+      const alreadyRevealed = isUser1 ? conversation.user1_name_revealed : conversation.user2_name_revealed;
+
+      if (alreadyRevealed === 1) {
+        console.log('ℹ️ Nome già rivelato in precedenza');
+        return res.json({
+          success: true,
+          message: 'Nome già rivelato',
+          alreadyRevealed: true
+        });
+      }
+
+      db.run(
+        `UPDATE conversations SET ${nameRevealedField} = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [conversationId],
+        function (err) {
+          if (err) {
+            console.error('Errore aggiornamento rivelazione nome:', err);
+            return res.status(500).json({ error: 'Errore nell\'aggiornare la rivelazione' });
+          }
+
+          if (this.changes === 0) {
+            console.log('⚠️ Nessuna modifica effettuata');
+            return res.status(500).json({ error: 'Impossibile aggiornare la rivelazione' });
+          }
+
+          console.log(`✅ Nome rivelato con successo - User ${userId} in conversazione ${conversationId}`);
+
+          res.json({
+            success: true,
+            message: 'Nome rivelato con successo',
+            revealed: true
+          });
+        }
+      );
+    }
+  );
+});
+
+// Rivela SOLO il tavolo
+app.post('/api/conversations/:conversationId/reveal-table', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user.userId;
+
+  console.log(`🪑 Richiesta rivelazione TAVOLO - Conversazione: ${conversationId}, User: ${userId}`);
+
+  db.get(
+    'SELECT id, user1_id, user2_id, user1_table_revealed, user2_table_revealed FROM conversations WHERE id = ? AND (user1_id = ? OR user2_id = ?)',
+    [conversationId, userId, userId],
+    (err, conversation) => {
+      if (err) {
+        console.error('Errore verifica conversazione:', err);
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!conversation) {
+        console.log('❌ Conversazione non trovata o utente non autorizzato');
+        return res.status(404).json({ error: 'Conversazione non trovata' });
+      }
+
+      const isUser1 = conversation.user1_id === userId;
+      const tableRevealedField = isUser1 ? 'user1_table_revealed' : 'user2_table_revealed';
+      const alreadyRevealed = isUser1 ? conversation.user1_table_revealed : conversation.user2_table_revealed;
+
+      if (alreadyRevealed === 1) {
+        console.log('ℹ️ Tavolo già rivelato in precedenza');
+        return res.json({
+          success: true,
+          message: 'Tavolo già rivelato',
+          alreadyRevealed: true
+        });
+      }
+
+      db.run(
+        `UPDATE conversations SET ${tableRevealedField} = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [conversationId],
+        function (err) {
+          if (err) {
+            console.error('Errore aggiornamento rivelazione tavolo:', err);
+            return res.status(500).json({ error: 'Errore nell\'aggiornare la rivelazione' });
+          }
+
+          if (this.changes === 0) {
+            console.log('⚠️ Nessuna modifica effettuata');
+            return res.status(500).json({ error: 'Impossibile aggiornare la rivelazione' });
+          }
+
+          console.log(`✅ Tavolo rivelato con successo - User ${userId} in conversazione ${conversationId}`);
+
+          res.json({
+            success: true,
+            message: 'Tavolo rivelato con successo',
+            revealed: true
+          });
+        }
+      );
+    }
+  );
+});
+
+// Segnala utente
+app.post('/api/conversations/:conversationId/report', authenticateToken, (req, res) => {
+  const { conversationId } = req.params;
+  const { reason } = req.body;
+  const reporterId = req.user.userId;
+
+  console.log(`⚠️ Segnalazione ricevuta - Conv: ${conversationId}, Reporter: ${reporterId}`);
+
+  // Verifica conversazione
+  db.get(
+    'SELECT * FROM conversations WHERE id = ? AND (user1_id = ? OR user2_id = ?)',
+    [conversationId, reporterId, reporterId],
+    (err, conversation) => {
+      if (err) {
+        console.error('Errore verifica conversazione:', err);
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (!conversation) {
+        return res.status(404).json({ error: 'Conversazione non trovata' });
+      }
+
+      // Determina l'utente segnalato
+      const reportedUserId = conversation.user1_id === reporterId ? conversation.user2_id : conversation.user1_id;
+
+      // Inserisci segnalazione
+      db.run(
+        'INSERT INTO reports (reporter_id, reported_user_id, conversation_id, reason, status) VALUES (?, ?, ?, ?, ?)',
+        [reporterId, reportedUserId, conversationId, reason || null, 'pending'],
+        function (err) {
+          if (err) {
+            console.error('Errore creazione segnalazione:', err);
+            return res.status(500).json({ error: 'Errore creazione segnalazione' });
+          }
+
+          const reportId = this.lastID;
+          console.log(`📝 Segnalazione creata: ID ${reportId}`);
+
+          // Recupera dati completi per email
+          const emailQuery = `
+            SELECT 
+              r.id,
+              r.created_at,
+              r.reason,
+              r.conversation_id,
+              reporter.id as reporter_id,
+              reporter.nome as reporter_name,
+              reporter.cognome as reporter_surname,
+              reporter.email as reporter_email,
+              reported.id as reported_user_id,
+              reported.nome as reported_user_name,
+              reported.cognome as reported_user_surname,
+              reported.email as reported_user_email,
+              reported.tavolo as reported_user_table
+            FROM reports r
+            JOIN users reporter ON r.reporter_id = reporter.id
+            JOIN users reported ON r.reported_user_id = reported.id
+            WHERE r.id = ?
+          `;
+
+          db.get(emailQuery, [reportId], (err, reportData) => {
+            if (err) {
+              console.error('Errore recupero dati segnalazione:', err);
+            } else {
+              // Invia email admin
+              const emailData = {
+                id: reportData.id,
+                created_at: reportData.created_at,
+                conversation_id: reportData.conversation_id,
+                reason: reportData.reason,
+                reporter_id: reportData.reporter_id,
+                reporter_name: `${reportData.reporter_name} ${reportData.reporter_surname}`,
+                reporter_email: reportData.reporter_email,
+                reported_user_id: reportData.reported_user_id,
+                reported_user_name: `${reportData.reported_user_name} ${reportData.reported_user_surname}`,
+                reported_user_email: reportData.reported_user_email,
+                reported_user_table: reportData.reported_user_table
+              };
+
+              sendReportEmail(emailData)
+                .then(() => {
+                  console.log(`📧 Email segnalazione inviata per report ID ${reportId}`);
+                })
+                .catch(error => {
+                  console.error('Errore invio email segnalazione:', error);
+                });
+            }
+          });
+
+          res.json({
+            success: true,
+            reportId: reportId,
+            message: 'Segnalazione inviata con successo'
+          });
+        }
+      );
+    }
+  );
+});
+
+// ============================================================================
+// API ENDPOINTS - ADMIN
+// ============================================================================
+
+// Login admin
+app.post('/api/admin/login', (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    const token = jwt.sign(
+      { username: ADMIN_USERNAME, isAdmin: true },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('✅ Admin login effettuato');
+    res.json({ success: true, token });
+  } else {
+    console.log('❌ Tentativo login admin fallito');
+    res.status(401).json({ error: 'Credenziali non valide' });
+  }
+});
+
+// Statistiche
+app.get('/api/admin/stats', authenticateAdminJWT, (req, res) => {
+  const stats = {};
+
+  db.get('SELECT COUNT(*) as count FROM users', (err, result) => {
+    stats.totalUsers = result ? result.count : 0;
+
+    db.get(
+      "SELECT COUNT(*) as count FROM users WHERE logged_in = 1 AND datetime(last_activity, '+30 minutes') > datetime('now')",
+      (err, result) => {
+        stats.onlineUsers = result ? result.count : 0;
+
+        db.get('SELECT COUNT(*) as count FROM messages', (err, result) => {
+          stats.totalMessages = result ? result.count : 0;
+
+          db.get('SELECT COUNT(*) as count FROM users WHERE newsletter = 1', (err, result) => {
+            stats.newsletterSubscribers = result ? result.count : 0;
+
+            db.get("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'", (err, result) => {
+              stats.pendingReports = result ? result.count : 0;
+
+              // Conta backup
+              fs.readdir(BACKUP_DIR, (err, files) => {
+                if (err) {
+                  stats.backupCount = 0;
+                } else {
+                  stats.backupCount = files.filter(f => f.endsWith('.gz')).length;
+                }
+
+                res.json(stats);
+              });
+            });
+          });
+        });
+      }
+    );
+  });
+});
+
+// Lista utenti
+app.get('/api/admin/users', authenticateAdminJWT, (req, res) => {
+  const query = `
+    SELECT 
+      u.id,
+      u.email,
+      u.nome,
+      u.cognome,
+      u.gender,
+      u.distinctive_sign,
+      u.tavolo,
+      u.logged_in,
+      u.last_activity,
+      u.newsletter,
+      u.created_at,
+      (SELECT COUNT(*) FROM messages WHERE sender_id = u.id) as messages_sent,
+      (SELECT COUNT(*) FROM reports WHERE reported_user_id = u.id) as reports_received
+    FROM users u
+    ORDER BY u.created_at DESC
+  `;
+
+  db.all(query, (err, users) => {
+    if (err) {
+      console.error('Errore query utenti admin:', err);
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    res.json(users);
+  });
+});
+
+// Export newsletter
+app.get('/api/admin/export-newsletter', authenticateAdminJWT, (req, res) => {
+  db.all(
+    'SELECT email, nome, cognome, created_at FROM users WHERE newsletter = 1 ORDER BY created_at DESC',
+    (err, subscribers) => {
+      if (err) {
+        console.error('Errore export newsletter:', err);
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      res.json(subscribers);
+    }
+  );
+});
+
+// Lista segnalazioni
+app.get('/api/admin/reports', authenticateAdminJWT, (req, res) => {
+  const query = `
+    SELECT 
+      r.id,
+      r.reporter_id,
+      r.reported_user_id,
+      r.conversation_id,
+      r.reason,
+      r.created_at,
+      r.status,
+      r.reviewed_at,
+      r.reviewed_by,
+      r.notes,
+      reporter.nome as reporter_nome,
+      reporter.cognome as reporter_cognome,
+      reporter.email as reporter_email,
+      reported.nome as reported_nome,
+      reported.cognome as reported_cognome,
+      reported.email as reported_email,
+      reported.tavolo as reported_tavolo
+    FROM reports r
+    JOIN users reporter ON r.reporter_id = reporter.id
+    JOIN users reported ON r.reported_user_id = reported.id
+    ORDER BY r.created_at DESC
+  `;
+
+  db.all(query, (err, reports) => {
+    if (err) {
+      console.error('Errore query segnalazioni:', err);
+      return res.status(500).json({ error: 'Errore database' });
+    }
+
+    res.json(reports);
+  });
+});
+
+// Gestisci segnalazione
+app.patch('/api/admin/reports/:reportId', authenticateAdminJWT, (req, res) => {
+  const { reportId } = req.params;
+  const { status, notes } = req.body;
+
+  if (!status) {
+    return res.status(400).json({ error: 'Status richiesto' });
+  }
+
+  db.run(
+    'UPDATE reports SET status = ?, notes = ?, reviewed_at = CURRENT_TIMESTAMP, reviewed_by = ? WHERE id = ?',
+    [status, notes || null, req.admin.username, reportId],
+    function (err) {
+      if (err) {
+        console.error('Errore aggiornamento segnalazione:', err);
+        return res.status(500).json({ error: 'Errore database' });
+      }
+
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Segnalazione non trovata' });
+      }
+
+      console.log(`✅ Segnalazione ${reportId} aggiornata a status: ${status}`);
+      res.json({ success: true });
+    }
+  );
+});
+
+// IP del server
+app.get('/api/admin/server-ip', authenticateAdminJWT, (req, res) => {
+  const { networkInterfaces } = require('os');
+  const nets = networkInterfaces();
+  const results = {};
+
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        if (!results[name]) {
+          results[name] = [];
+        }
+        results[name].push(net.address);
+      }
+    }
+  }
+
+  const primaryIP = results.eth0 ? results.eth0[0] : (results.wlan0 ? results.wlan0[0] : 'Non disponibile');
+
+  res.json({
+    ip: primaryIP,
+    all: results
+  });
+});
+
+// Reset manuale (admin)
+app.post('/api/admin/reset', authenticateAdminJWT, (req, res) => {
+  console.log('🔄 Reset manuale richiesto da admin');
+  
+  resetDaily();
+  
+  res.json({
+    success: true,
+    message: 'Reset in corso. Il database verrà pulito e verrà creato un backup.'
+  });
+});
+
+// ============================================================================
+// AVVIO SERVER
+// ============================================================================
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('='.repeat(60));
+  console.log('🚀 MEEQ SERVER ATTIVO');
+  console.log('='.repeat(60));
+  console.log(`📍 Server in ascolto sulla porta ${PORT}`);
+  console.log(`🌐 Accessibile da: http://172.16.0.10:${PORT}`);
+  console.log(`⏰ Reset giornaliero: 4:00 AM`);
+  
+  // Conta backup esistenti
+  fs.readdir(BACKUP_DIR, (err, files) => {
+    if (!err) {
+      const backupFiles = files.filter(f => f.endsWith('.gz'));
+      console.log(`📊 Backup attivi: ${backupFiles.length}`);
+    }
+  });
+  
+  console.log(`🔒 Sistema backup attivo: conservazione 30 giorni`);
+  console.log('='.repeat(60));
+});

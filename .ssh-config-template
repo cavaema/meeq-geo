@@ -1,0 +1,27 @@
+# Template configurazione SSH per MEEQ
+# Copia questo file in ~/.ssh/config e modifica gli IP/utenti
+
+# Server VPS (Centrale)
+Host meeq-vps
+    HostName 128.140.84.82
+    User root
+    Port 22
+    # Aggiungi qui la chiave SSH se necessario:
+    # IdentityFile ~/.ssh/id_rsa_vps
+
+# Server Raspberry Pi (Locale) - se diverso dalla macchina corrente
+# Host meeq-local
+#     HostName <IP_RASPBERRY_PI>
+#     User meeq
+#     Port 22
+#     # IdentityFile ~/.ssh/id_rsa_local
+
+
+
+
+
+
+
+
+
+

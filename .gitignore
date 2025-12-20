@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database files
+*.db
+*.db.backup
+*.db.old
+*.db.OLD
+*.db.vecchio
+*.db.VECCHIO
+chat.db*
+meeq.db*
+
+# Logs
+*.log
+*.log.*
+meeq-error.log
+server.log
+meeq.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+/etc/meeq/meeq.env
+
+# Backups
+backups/
+*.backup
+*.BACKUP
+*.old
+*.OLD
+*.vecchio
+*.VECCHIO
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# SSH keys (IMPORTANT: never commit!)
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+id_raspberry*
+*.pub
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Cloudflare tunnel
+cloudflared/
+*.tunnel.json
+
+# Service files (systemd)
+*.service
+
+# Build files
+dist/
+build/
+

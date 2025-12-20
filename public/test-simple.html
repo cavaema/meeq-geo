@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API Semplice</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>Test API Check-Email</h1>
+    <input type="email" id="email" value="test@test.com">
+    <button onclick="test()">TEST</button>
+    <pre id="result"></pre>
+    
+    <script>
+    function test() {
+        const email = document.getElementById('email').value;
+        const url = window.location.origin + '/api/check-email';
+        
+        console.log('Testing:', url);
+        document.getElementById('result').textContent = 'Chiamando ' + url + '...\n';
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email: email})
+        })
+        .then(r => {
+            document.getElementById('result').textContent += 'Status: ' + r.status + '\n';
+            document.getElementById('result').textContent += 'Content-Type: ' + r.headers.get('content-type') + '\n';
+            return r.text();
+        })
+        .then(text => {
+            document.getElementById('result').textContent += 'Risposta:\n' + text;
+            
+            try {
+                const json = JSON.parse(text);
+                document.getElementById('result').textContent += '\n\n✅ È JSON valido!';
+            } catch(e) {
+                if(text.includes('<!DOCTYPE')) {
+                    document.getElementById('result').textContent += '\n\n❌ È HTML invece di JSON!';
+                }
+            }
+        })
+        .catch(err => {
+            document.getElementById('result').textContent += '\nErrore: ' + err;
+        });
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1945 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeq - Connetti. Scopri. Gioca.</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 30px 0;
+            position: sticky;
+            top: 0;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            z-index: 100;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .logo {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 48px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .tagline {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* Chat Header */
+        .chat-header {
+            position: sticky;
+            top: 0;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            z-index: 100;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+        }
+
+        .chat-user-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .chat-user-name {
+            font-weight: 600;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chat-user-table {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .chat-header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        /* Gender Badge */
+        .gender-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .gender-badge.male {
+            background: #3B82F6;
+            color: white;
+        }
+
+        .gender-badge.female {
+            background: #E91E8C;
+            color: white;
+        }
+
+        .gender-badge.other {
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 50%, #3B82F6 100%);
+            color: white;
+        }
+
+        /* Cards */
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card h2 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #E91E8C;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            background-size: 20px;
+            padding-right: 45px;
+        }
+
+        select option {
+            background: #2d1b3d;
+            color: white;
+        }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(233, 30, 140, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-danger {
+            background: #EF4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #DC2626;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #10B981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-small {
+            padding: 10px 20px;
+            font-size: 14px;
+            width: auto;
+            margin: 0 5px;
+        }
+
+        /* Checkbox */
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .checkbox-group a {
+            color: #E91E8C;
+            text-decoration: none;
+        }
+
+        /* Tables List */
+        .tables-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .table-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .table-card:hover {
+            border-color: #E91E8C;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(233, 30, 140, 0.3);
+        }
+
+        .table-card.active {
+            border-color: #8B5CF6;
+            background: rgba(139, 92, 246, 0.2);
+        }
+
+        .table-number {
+            font-size: 32px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .table-users {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .table-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #E91E8C;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Users List */
+        .users-list {
+            margin-top: 20px;
+        }
+
+        .user-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-item:hover {
+            border-color: #E91E8C;
+            transform: translateX(5px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-details {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .distinctive-sign {
+            font-size: 12px;
+            color: #E91E8C;
+            font-style: italic;
+            margin-top: 4px;
+        }
+
+        /* Conversations List */
+        .conversations-list {
+            margin-top: 20px;
+        }
+
+        .conversation-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .conversation-item:hover {
+            border-color: #E91E8C;
+            transform: translateX(5px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .conversation-item.unread {
+            border-color: #EF4444;
+            border-width: 2px;
+        }
+
+        .conversation-item.pending {
+            opacity: 0.7;
+            border-style: dashed;
+        }
+
+        .conversation-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .conversation-user {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .conversation-time {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .conversation-preview {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .conversation-preview.pending-message {
+            color: rgba(255, 255, 255, 0.4);
+            font-style: italic;
+        }
+
+        .unread-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #EF4444;
+            color: white;
+            min-width: 24px;
+            height: 24px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            padding: 0 8px;
+        }
+
+        /* Messages */
+        .messages-container {
+            padding: 20px;
+            height: calc(100vh - 250px);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            word-wrap: break-word;
+        }
+
+        .message.sent {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.received {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-time {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 4px;
+        }
+
+        .message.sent .message-time {
+            text-align: right;
+        }
+
+        /* Revelation Buttons */
+        .revelation-buttons {
+            display: flex;
+            gap: 10px;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-reveal-name,
+        .btn-reveal-table {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-reveal-name:hover,
+        .btn-reveal-table:hover {
+            border-color: #E91E8C;
+            background: rgba(233, 30, 140, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .btn-reveal-name.revealed,
+        .btn-reveal-table.revealed {
+            border-color: #10B981;
+            background: rgba(16, 185, 129, 0.1);
+            color: #10B981;
+        }
+
+        .btn-reveal-name:disabled,
+        .btn-reveal-table:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Chat Input */
+        .chat-input-container {
+            position: sticky;
+            bottom: 0;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            padding: 15px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            padding: 12px 20px;
+            color: white;
+            font-size: 16px;
+            resize: none;
+            max-height: 100px;
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            border: none;
+            color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 20px rgba(233, 30, 140, 0.4);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            border-radius: 20px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 32px;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-footer .btn {
+            margin: 0;
+        }
+
+        /* Messages */
+        .info-message {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #60A5FA;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin: 10px 0;
+        }
+
+        .warning-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #FCA5A5;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin: 10px 0;
+        }
+
+        .success-message {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #6EE7B7;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin: 10px 0;
+        }
+
+        /* Empty States */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-text {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-subtext {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Privacy Link */
+        .privacy-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .privacy-link a {
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: none;
+            font-size: 12px;
+        }
+
+        .privacy-link a:hover {
+            color: #E91E8C;
+        }
+
+        /* Utility */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Mobile Optimizations */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .messages-container {
+                height: calc(100vh - 200px);
+            }
+        }
+
+        /* iOS Safe Area */
+        @supports (padding: env(safe-area-inset-bottom)) {
+            body {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+
+            .chat-input-container {
+                padding-bottom: calc(15px + env(safe-area-inset-bottom));
+            }
+        }
+
+        /* Android Keyboard Fix */
+        @media screen and (max-width: 768px) {
+            .chat-screen-active {
+                height: 100vh;
+                height: -webkit-fill-available;
+            }
+            
+            .messages-container {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            
+            .chat-input-container {
+                padding-bottom: calc(15px + env(safe-area-inset-bottom));
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header (mostrato solo in home e liste) -->
+    <div id="mainHeader" class="header">
+        <div class="logo">Meeq</div>
+        <div class="tagline">Connetti. Scopri. Gioca.</div>
+    </div>
+
+    <!-- Container principale -->
+    <div class="container">
+        <!-- Schermata 1: Check Email (PRIMA SCHERMATA) -->
+        <div id="emailCheckScreen" class="hidden">
+            <div class="card">
+                <h2>Benvenuto! 👋</h2>
+                <p style="text-align: center; color: rgba(255,255,255,0.7); margin-bottom: 20px;">
+                    Inserisci la tua email per iniziare
+                </p>
+                <form id="emailCheckForm">
+                    <div class="form-group">
+                        <label for="checkEmail">Email *</label>
+                        <input type="email" id="checkEmail" required placeholder="la-tua-email@esempio.com">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Continua</button>
+                </form>
+                <div class="privacy-link">
+                    <a href="/privacy.html" target="_blank">Informativa Privacy</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schermata 2: Registrazione (solo se email non esiste) -->
+        <div id="registerScreen" class="hidden">
+            <div class="card">
+                <h2>Crea il tuo account 📝</h2>
+                <p style="text-align: center; color: rgba(255,255,255,0.7); margin-bottom: 20px;">
+                    Email: <strong id="registerEmailDisplay"></strong>
+                </p>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="nome">Nome *</label>
+                        <input type="text" id="nome" required placeholder="Il tuo nome">
+                    </div>
+                    <div class="form-group">
+                        <label for="cognome">Cognome *</label>
+                        <input type="text" id="cognome" required placeholder="Il tuo cognome">
+                    </div>
+                    <div class="form-group">
+                        <label for="telefono">Telefono (opzionale)</label>
+                        <input type="tel" id="telefono" placeholder="+39 123 456 7890">
+                    </div>
+                    <div class="form-group">
+                        <label for="gender">Genere *</label>
+                        <select id="gender" required>
+                            <option value="">Seleziona...</option>
+                            <option value="male">Maschio</option>
+                            <option value="female">Femmina</option>
+                            <option value="other">Altro</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="privacyConsent" required>
+                        <label for="privacyConsent">
+                            Accetto la <a href="/privacy.html" target="_blank">Privacy Policy</a> *
+                        </label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="newsletterConsent">
+                        <label for="newsletterConsent">
+                            Desidero ricevere newsletter e aggiornamenti
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Continua</button>
+                    <button type="button" class="btn btn-secondary" onclick="showEmailCheckScreen()">Cambia Email</button>
+                </form>
+                <div class="privacy-link">
+                    <a href="/privacy.html" target="_blank">Informativa Privacy</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Schermata 3: Inserimento PIN + Segno Distintivo -->
+        <div id="pinScreen" class="hidden">
+            <div class="card">
+                <h2>Verifica Email 📧</h2>
+                <p style="text-align: center; color: rgba(255,255,255,0.7); margin-bottom: 20px;">
+                    Abbiamo inviato un codice PIN a <strong id="emailDisplay"></strong>
+                </p>
+                <form id="pinForm">
+                    <div class="form-group">
+                        <label for="pin">Codice PIN (6 cifre) *</label>
+                        <input type="text" id="pin" required maxlength="6" pattern="[0-9]{6}" placeholder="123456">
+                    </div>
+                    <div class="form-group">
+                        <label for="distinctiveSign">Segno Distintivo (opzionale)</label>
+                        <input type="text" id="distinctiveSign" maxlength="50" placeholder="es. Giacca blu, Cappello rosso...">
+                        <div class="info-message" style="margin-top: 10px;">
+                            💡 Il segno distintivo aiuterà gli altri a riconoscerti visivamente. Puoi modificarlo ogni volta che accedi!
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Verifica PIN</button>
+                    <button type="button" class="btn btn-secondary" onclick="showEmailCheckScreen()">Cambia Email</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Schermata 4: Scelta Tavolo -->
+        <div id="tableScreen" class="hidden">
+            <div class="card">
+                <h2>Scegli il tuo tavolo 🪑</h2>
+                <p style="text-align: center; color: rgba(255,255,255,0.7); margin-bottom: 20px;">
+                    Seleziona il numero del tavolo dove sei seduto
+                </p>
+                <div id="tablesGrid" class="tables-grid">
+                    <!-- Tavoli generati dinamicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Schermata 5: Lista Utenti al Tavolo -->
+        <div id="usersScreen" class="hidden">
+            <div class="card">
+                <h2>Utenti al tuo tavolo 👥</h2>
+                <p style="text-align: center; color: rgba(255,255,255,0.7); margin-bottom: 20px;">
+                    Tavolo <strong id="currentTableDisplay"></strong>
+                </p>
+                <div id="usersList" class="users-list">
+                    <!-- Utenti generati dinamicamente -->
+                </div>
+                <button class="btn btn-secondary" onclick="showTableScreen()">Cambia Tavolo</button>
+            </div>
+        </div>
+
+        <!-- Schermata 6: Tutte le Conversazioni -->
+        <div id="conversationsScreen" class="hidden">
+            <div class="card">
+                <h2>Le tue conversazioni 💬</h2>
+                <div id="conversationsList" class="conversations-list">
+                    <!-- Conversazioni generate dinamicamente -->
+                </div>
+                <button class="btn btn-secondary" onclick="showUsersScreen()">Torna agli Utenti</button>
+            </div>
+        </div>
+
+        <!-- Schermata 7: Chat -->
+        <div id="chatScreen" class="hidden">
+            <!-- Header Chat -->
+            <div class="chat-header">
+                <div class="chat-header-left">
+                    <button class="back-btn" onclick="backToConversations()">←</button>
+                    <div class="chat-user-info">
+                        <div class="chat-user-name">
+                            <span id="chatUserName">Caricamento...</span>
+                            <span id="chatUserGenderBadge"></span>
+                        </div>
+                        <div class="chat-user-table" id="chatUserTable">Tavolo sconosciuto</div>
+                        <div class="distinctive-sign" id="chatUserSign"></div>
+                    </div>
+                </div>
+                <div class="chat-header-actions">
+                    <button class="icon-btn" onclick="showReportModal()" title="Segnala">⚠️</button>
+                </div>
+            </div>
+
+            <!-- Revelation Buttons -->
+            <div id="revelationButtons" class="revelation-buttons hidden">
+                <button id="revealNameBtn" class="btn-reveal-name" onclick="revealName()">
+                    <span>👤</span>
+                    <span>Rivela Nome</span>
+                </button>
+                <button id="revealTableBtn" class="btn-reveal-table" onclick="revealTable()">
+                    <span>🪑</span>
+                    <span>Rivela Tavolo</span>
+                </button>
+            </div>
+
+            <!-- Messages Container -->
+            <div id="messagesContainer" class="messages-container">
+                <!-- Messaggi generati dinamicamente -->
+            </div>
+
+            <!-- Input Chat -->
+            <div class="chat-input-container">
+                <textarea id="messageInput" class="chat-input" placeholder="Scrivi un messaggio..." rows="1"></textarea>
+                <button id="sendBtn" class="send-btn" onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal per richieste e segnalazioni -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content">
+            <!-- Contenuto dinamico -->
+        </div>
+    </div>
+
+    <script>
+        // Configurazione
+        const API_URL = window.location.origin + '/api';
+        
+        // Stato globale
+        let currentUser = null;
+        let currentConversationId = null;
+        let currentConversation = null;
+        let messageCheckInterval = null;
+        let conversationsCheckInterval = null;
+
+        // Utility: Gestione schermate
+        function showScreen(screenId) {
+            const screens = ['emailCheckScreen', 'registerScreen', 'pinScreen', 'tableScreen', 'usersScreen', 'conversationsScreen', 'chatScreen'];
+            screens.forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+            
+            // Mostra/nascondi header
+            const header = document.getElementById('mainHeader');
+            if (screenId === 'chatScreen') {
+                header.classList.add('hidden');
+                document.body.classList.add('chat-screen-active');
+            } else {
+                header.classList.remove('hidden');
+                document.body.classList.remove('chat-screen-active');
+            }
+        }
+
+        // Utility: Sessione
+        function saveSession(userData) {
+            localStorage.setItem('meeq_session', JSON.stringify(userData));
+            currentUser = userData;
+        }
+
+        function getSession() {
+            const session = localStorage.getItem('meeq_session');
+            return session ? JSON.parse(session) : null;
+        }
+
+        function clearSession() {
+            localStorage.removeItem('meeq_session');
+            currentUser = null;
+        }
+
+        // Utility: Tavolo da URL
+        function getTableFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('tavolo');
+        }
+
+        // Utility: Formattazione tempo
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'Ora';
+            if (diffMins < 60) return `${diffMins}m fa`;
+            if (diffHours < 24) return `${diffHours}h fa`;
+            if (diffDays < 7) return `${diffDays}g fa`;
+            
+            return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+        }
+
+        // Utility: Gender badge HTML
+        function getGenderBadgeHTML(gender) {
+            const symbols = {
+                male: '♂',
+                female: '♀',
+                other: '⚧'
+            };
+            return `<span class="gender-badge ${gender}">${symbols[gender] || '?'}</span>`;
+        }
+
+        // Utility: Nome anonimo generato da hash
+        function getAnonymousName(userId, conversationId) {
+            const hash = (userId + conversationId).split('').reduce((a, b) => {
+                a = ((a << 5) - a) + b.charCodeAt(0);
+                return a & a;
+            }, 0);
+            const num = Math.abs(hash % 100) + 1;
+            return `Anonimo ${num}`;
+        }
+
+        // API Calls
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+                
+                if (currentUser && currentUser.token) {
+                    options.headers['Authorization'] = `Bearer ${currentUser.token}`;
+                }
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                
+                const response = await fetch(`${API_URL}${endpoint}`, options);
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Errore nella richiesta');
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        // Check Email (prima schermata)
+        document.getElementById('emailCheckForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('checkEmail').value.trim();
+            
+            try {
+                const data = await apiCall('/check-email', 'POST', { email });
+                
+                // Salva email temporaneamente
+                sessionStorage.setItem('currentEmail', email);
+                
+                if (data.exists) {
+                    // Email già registrata - vai a PIN per re-login
+                    document.getElementById('emailDisplay').textContent = email;
+                    showScreen('pinScreen');
+                    alert('PIN inviato! Controlla la tua email per rientrare.');
+                } else {
+                    // Email nuova - vai a registrazione
+                    document.getElementById('registerEmailDisplay').textContent = email;
+                    showScreen('registerScreen');
+                }
+                
+                // Salva email per futuro uso
+                localStorage.setItem('meeq_email', email);
+                
+            } catch (error) {
+                alert(error.message || 'Errore durante la verifica email');
+            }
+        });
+
+        // Registrazione (solo per nuovi utenti)
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = sessionStorage.getItem('currentEmail');
+            if (!email) {
+                alert('Errore: email non trovata. Riprova.');
+                showEmailCheckScreen();
+                return;
+            }
+            
+            const nome = document.getElementById('nome').value.trim();
+            const cognome = document.getElementById('cognome').value.trim();
+            const telefono = document.getElementById('telefono').value.trim();
+            const gender = document.getElementById('gender').value;
+            const privacyAccepted = document.getElementById('privacyConsent').checked;
+            const newsletterAccepted = document.getElementById('newsletterConsent').checked;
+            
+            if (!privacyAccepted) {
+                alert('Devi accettare la Privacy Policy per continuare');
+                return;
+            }
+            
+            try {
+                const data = await apiCall('/register', 'POST', {
+                    nome,
+                    cognome,
+                    email,
+                    telefono,
+                    gender,
+                    privacyAccepted,
+                    newsletterAccepted
+                });
+                
+                document.getElementById('emailDisplay').textContent = email;
+                
+                // Salva dati temporanei per schermata PIN
+                sessionStorage.setItem('pendingRegistration', JSON.stringify({
+                    nome,
+                    cognome,
+                    email,
+                    telefono,
+                    gender,
+                    isNewUser: true
+                }));
+                
+                showScreen('pinScreen');
+                alert('PIN inviato! Controlla la tua email.');
+            } catch (error) {
+                alert(error.message || 'Errore durante la registrazione');
+            }
+        });
+
+        // Verifica PIN
+        document.getElementById('pinForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = sessionStorage.getItem('currentEmail');
+            if (!email) {
+                alert('Sessione scaduta. Riprova la registrazione.');
+                showEmailCheckScreen();
+                return;
+            }
+            
+            const pin = document.getElementById('pin').value.trim();
+            const distinctiveSign = document.getElementById('distinctiveSign').value.trim();
+            
+            try {
+                // Invia sempre il segno distintivo (può essere modificato ogni giorno)
+                const data = await apiCall('/verify-pin', 'POST', {
+                    email: email,
+                    pin,
+                    distinctiveSign: distinctiveSign || null
+                });
+                
+                // Recupera i dati dell'utente
+                const pending = sessionStorage.getItem('pendingRegistration');
+                const userData = pending ? JSON.parse(pending) : { email };
+                
+                // Salva sessione con segno distintivo aggiornato
+                saveSession({
+                    token: data.token,
+                    userId: data.userId || data.user.id,
+                    email: email,
+                    nome: userData.nome || data.user.nome,
+                    cognome: userData.cognome || data.user.cognome,
+                    gender: userData.gender || data.user.gender,
+                    distinctiveSign: distinctiveSign || null,
+                    tableNumber: null
+                });
+                
+                sessionStorage.removeItem('pendingRegistration');
+                sessionStorage.removeItem('currentEmail');
+                
+                // 🔥 CORREZIONE: Se c'è tavolo dal QR, assegnalo automaticamente
+                const tableFromQR = getTableFromURL();
+                if (tableFromQR) {
+                    try {
+                        // Assegna il tavolo dal QR automaticamente
+                        await apiCall('/select-table', 'POST', { tavolo: tableFromQR });
+                        
+                        // Aggiorna sessione
+                        currentUser.tableNumber = tableFromQR;
+                        saveSession(currentUser);
+                        
+                        // Vai direttamente alle conversazioni
+                        loadConversations();
+                        showScreen('conversationsScreen');
+                    } catch (error) {
+                        console.error('Errore assegnazione tavolo da QR:', error);
+                        // Se fallisce, mostra schermata scelta tavoli
+                        loadTables();
+                        showScreen('tableScreen');
+                    }
+                } else {
+                    // Nessun QR: mostra schermata scelta tavoli
+                    loadTables();
+                    showScreen('tableScreen');
+                }
+                
+            } catch (error) {
+                alert(error.message || 'PIN non valido');
+            }
+        });
+
+        // Carica tavoli
+        async function loadTables() {
+            try {
+                const tables = await apiCall('/tables/active');
+                const tablesGrid = document.getElementById('tablesGrid');
+                tablesGrid.innerHTML = '';
+                
+                // Tavolo suggerito dal QR (se presente)
+                const suggestedTable = getTableFromURL();
+                
+                if (!tables || tables.length === 0) {
+                    tablesGrid.innerHTML = '<div class="empty-state"><div class="empty-state-text">Nessun tavolo con utenti attivi</div></div>';
+                    return;
+                }
+                
+                tables.forEach(table => {
+                    const tableCard = document.createElement('div');
+                    tableCard.className = 'table-card';
+                    
+                    // Evidenzia il tavolo dal QR se presente
+                    if (suggestedTable && table.id === suggestedTable) {
+                        tableCard.classList.add('active');
+                    }
+                    
+                    tableCard.onclick = () => selectTable(table.id);
+                    
+                    // Estrae il numero dal nome del tavolo (es: "Tavolo 5" -> "5")
+                    const tableNumber = table.name.replace('Tavolo ', '');
+                    
+                    tableCard.innerHTML = `
+                        <div class="table-number">${tableNumber}</div>
+                        <div class="table-users">${table.userCount} ${table.userCount === 1 ? 'utente' : 'utenti'}</div>
+                        ${suggestedTable && table.id === suggestedTable ? '<div class="table-badge">QR</div>' : ''}
+                    `;
+                    
+                    tablesGrid.appendChild(tableCard);
+                });
+            } catch (error) {
+                console.error('Errore caricamento tavoli:', error);
+                alert('Errore nel caricamento dei tavoli');
+            }
+        }
+
+        // Seleziona tavolo
+        async function selectTable(tableNumber) {
+            try {
+                await apiCall('/select-table', 'POST', { tavolo: tableNumber });
+                
+                currentUser.tableNumber = tableNumber;
+                saveSession(currentUser);
+                
+                // Vai alle conversazioni
+                loadConversations();
+                showScreen('conversationsScreen');
+            } catch (error) {
+                alert(error.message || 'Errore nella selezione del tavolo');
+            }
+        }
+
+        // Carica utenti
+        async function loadUsers(tableNumber) {
+            try {
+                const data = await apiCall(`/table/${tableNumber}/users`);
+                document.getElementById('currentTableDisplay').textContent = tableNumber;
+                
+                const usersList = document.getElementById('usersList');
+                usersList.innerHTML = '';
+                
+                // Filtra l'utente corrente
+                const otherUsers = data.users.filter(u => u.id !== currentUser.userId);
+                
+                if (otherUsers.length === 0) {
+                    usersList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">😔</div><div class="empty-state-text">Non ci sono altri utenti a questo tavolo</div></div>';
+                    return;
+                }
+                
+                otherUsers.forEach(user => {
+                    const userItem = document.createElement('div');
+                    userItem.className = 'user-item';
+                    userItem.onclick = () => startConversation(user.id);
+                    
+                    const initial = user.nome.charAt(0).toUpperCase();
+                    
+                    userItem.innerHTML = `
+                        <div class="user-avatar">${initial}</div>
+                        <div class="user-info">
+                            <div class="user-name">
+                                ${user.nome}
+                                ${getGenderBadgeHTML(user.gender)}
+                            </div>
+                            <div class="user-details">
+                                Tavolo ${user.table_number}
+                            </div>
+                            ${user.distinctive_sign ? `<div class="distinctive-sign">🔍 ${user.distinctive_sign}</div>` : ''}
+                        </div>
+                    `;
+                    
+                    usersList.appendChild(userItem);
+                });
+                
+                // Pulsante per vedere tutte le conversazioni
+                const allConvBtn = document.createElement('button');
+                allConvBtn.className = 'btn btn-primary';
+                allConvBtn.textContent = '💬 Vedi tutte le conversazioni';
+                allConvBtn.style.marginTop = '20px';
+                allConvBtn.onclick = loadConversations;
+                usersList.appendChild(allConvBtn);
+                
+            } catch (error) {
+                console.error('Errore caricamento utenti:', error);
+                alert('Errore nel caricamento degli utenti');
+            }
+        }
+
+        // Inizia conversazione
+        async function startConversation(otherUserId) {
+            try {
+                const data = await apiCall('/conversations/start', 'POST', { otherUserId });
+                currentConversationId = data.conversation.id;
+                currentConversation = data.conversation;
+                
+                loadChat(data.conversation);
+                showScreen('chatScreen');
+            } catch (error) {
+                alert(error.message || 'Errore nell\'avvio della conversazione');
+            }
+        }
+
+        // Carica conversazioni
+        async function loadConversations() {
+            try {
+                const data = await apiCall('/conversations');
+                const conversationsList = document.getElementById('conversationsList');
+                conversationsList.innerHTML = '';
+                
+                if (data.conversations.length === 0) {
+                    conversationsList.innerHTML = '<div class="empty-state"><div class="empty-state-icon">💬</div><div class="empty-state-text">Nessuna conversazione</div><div class="empty-state-subtext">Inizia a chattare con qualcuno!</div></div>';
+                    showScreen('conversationsScreen');
+                    return;
+                }
+                
+                data.conversations.forEach(conv => {
+                    const isInitiator = conv.user1_id === currentUser.userId;
+                    const otherUser = isInitiator ? conv.user2 : conv.user1;
+                    const isPending = conv.status === 'pending';
+                    const isAccepted = conv.status === 'accepted';
+                    const unreadCount = conv.unread_count || 0;
+                    
+                    const convItem = document.createElement('div');
+                    convItem.className = 'conversation-item';
+                    
+                    if (isPending) {
+                        convItem.classList.add('pending');
+                        if (!isInitiator) {
+                            // Se sei il ricevente, clicca per vedere e accettare/rifiutare
+                            convItem.onclick = () => showPendingConversation(conv);
+                        }
+                    } else if (isAccepted) {
+                        convItem.onclick = () => openConversation(conv.id);
+                    }
+                    
+                    if (unreadCount > 0) {
+                        convItem.classList.add('unread');
+                    }
+                    
+                    // Determina nome da mostrare
+                    const nameRevealed = isInitiator ? conv.user2_name_revealed : conv.user1_name_revealed;
+                    const displayName = nameRevealed ? `${otherUser.nome} ${otherUser.cognome}` : getAnonymousName(otherUser.id, conv.id);
+                    
+                    convItem.innerHTML = `
+                        <div class="conversation-header">
+                            <div class="conversation-user">
+                                ${displayName}
+                                ${getGenderBadgeHTML(otherUser.gender)}
+                            </div>
+                            <div class="conversation-time">${formatTime(conv.updated_at)}</div>
+                        </div>
+                        <div class="conversation-preview ${isPending ? 'pending-message' : ''}">
+                            ${isPending ? (isInitiator ? '⏳ In attesa di risposta...' : '💬 Nuova richiesta di conversazione!') : (conv.last_message || 'Nessun messaggio')}
+                        </div>
+                        ${unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : ''}
+                    `;
+                    
+                    conversationsList.appendChild(convItem);
+                });
+                
+                showScreen('conversationsScreen');
+                
+            } catch (error) {
+                console.error('Errore caricamento conversazioni:', error);
+                alert('Errore nel caricamento delle conversazioni');
+            }
+        }
+
+        // Mostra conversazione pending per accettare/rifiutare
+        async function showPendingConversation(conv) {
+            try {
+                const messagesData = await apiCall(`/conversations/${conv.id}/messages`);
+                
+                const modal = document.getElementById('reportModal');
+                modal.querySelector('.modal-content').innerHTML = `
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            <span>💬</span>
+                            <span>Nuova Conversazione</span>
+                        </div>
+                        <button class="modal-close" onclick="closeReportModal(); loadConversations();">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="user-info" style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <strong>${getAnonymousName(conv.user1.id, conv.id)}</strong>
+                                ${getGenderBadgeHTML(conv.user1.gender)}
+                            </div>
+                            ${conv.user1.distinctive_sign ? `<div class="distinctive-sign">🔍 ${conv.user1.distinctive_sign}</div>` : ''}
+                        </div>
+                        
+                        <div class="info-message">
+                            <strong>Messaggio iniziale:</strong>
+                        </div>
+                        
+                        <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; margin: 15px 0; max-height: 200px; overflow-y: auto;">
+                            ${messagesData.messages.map(msg => `
+                                <div style="margin-bottom: 10px;">
+                                    <div style="color: rgba(255,255,255,0.6); font-size: 11px;">${formatTime(msg.created_at)}</div>
+                                    <div>${msg.message}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        <div class="warning-message">
+                            Vuoi accettare questa conversazione? Una volta accettata, potrai chattare liberamente.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-danger" onclick="respondToConversation(${conv.id}, 'blocked')">Rifiuta</button>
+                        <button class="btn btn-success" onclick="respondToConversation(${conv.id}, 'accepted')">Accetta</button>
+                    </div>
+                `;
+                
+                modal.classList.add('show');
+                
+            } catch (error) {
+                console.error('Errore caricamento pending conversation:', error);
+                alert('Errore nel caricamento della conversazione');
+            }
+        }
+
+        // Rispondi a conversazione pending
+        async function respondToConversation(conversationId, action) {
+            try {
+                await apiCall(`/conversations/${conversationId}/${action}`, 'POST');
+                closeReportModal();
+                
+                if (action === 'accepted') {
+                    openConversation(conversationId);
+                } else {
+                    loadConversations();
+                }
+            } catch (error) {
+                alert(error.message || 'Errore nell\'azione');
+            }
+        }
+
+        // Apri conversazione
+        async function openConversation(conversationId) {
+            try {
+                const data = await apiCall(`/conversations/${conversationId}`);
+                currentConversationId = conversationId;
+                currentConversation = data.conversation;
+                
+                loadChat(data.conversation);
+                showScreen('chatScreen');
+            } catch (error) {
+                alert(error.message || 'Errore nell\'apertura della conversazione');
+            }
+        }
+
+        // Carica chat
+        async function loadChat(conversation) {
+            const isInitiator = conversation.user1_id === currentUser.userId;
+            const otherUser = isInitiator ? conversation.user2 : conversation.user1;
+            
+            // Aggiorna header
+            const nameRevealed = isInitiator ? conversation.user2_name_revealed : conversation.user1_name_revealed;
+            const tableRevealed = isInitiator ? conversation.user2_table_revealed : conversation.user1_table_revealed;
+            
+            const displayName = nameRevealed ? `${otherUser.nome} ${otherUser.cognome}` : getAnonymousName(otherUser.id, conversation.id);
+            const displayTable = tableRevealed ? `Tavolo ${otherUser.table_number}` : 'Tavolo sconosciuto';
+            
+            document.getElementById('chatUserName').textContent = displayName;
+            document.getElementById('chatUserGenderBadge').innerHTML = getGenderBadgeHTML(otherUser.gender);
+            document.getElementById('chatUserTable').textContent = displayTable;
+            
+            if (otherUser.distinctive_sign) {
+                document.getElementById('chatUserSign').textContent = `🔍 ${otherUser.distinctive_sign}`;
+                document.getElementById('chatUserSign').classList.remove('hidden');
+            } else {
+                document.getElementById('chatUserSign').classList.add('hidden');
+            }
+            
+            // Mostra/nascondi pulsanti rivelazione
+            const revelationButtons = document.getElementById('revelationButtons');
+            const revealNameBtn = document.getElementById('revealNameBtn');
+            const revealTableBtn = document.getElementById('revealTableBtn');
+            
+            if (conversation.status === 'accepted') {
+                revelationButtons.classList.remove('hidden');
+                
+                // Stato pulsante nome
+                const myNameRevealed = isInitiator ? conversation.user1_name_revealed : conversation.user2_name_revealed;
+                if (myNameRevealed) {
+                    revealNameBtn.classList.add('revealed');
+                    revealNameBtn.disabled = true;
+                    revealNameBtn.innerHTML = '<span>✓</span><span>Nome Rivelato</span>';
+                } else {
+                    revealNameBtn.classList.remove('revealed');
+                    revealNameBtn.disabled = false;
+                    revealNameBtn.innerHTML = '<span>👤</span><span>Rivela Nome</span>';
+                }
+                
+                // Stato pulsante tavolo (solo per initiator)
+                if (isInitiator) {
+                    revealTableBtn.style.display = 'flex';
+                    const myTableRevealed = conversation.user1_table_revealed;
+                    if (myTableRevealed) {
+                        revealTableBtn.classList.add('revealed');
+                        revealTableBtn.disabled = true;
+                        revealTableBtn.innerHTML = '<span>✓</span><span>Tavolo Rivelato</span>';
+                    } else {
+                        revealTableBtn.classList.remove('revealed');
+                        revealTableBtn.disabled = false;
+                        revealTableBtn.innerHTML = '<span>🪑</span><span>Rivela Tavolo</span>';
+                    }
+                } else {
+                    // Il ricevente non può rivelare il tavolo
+                    revealTableBtn.style.display = 'none';
+                }
+            } else {
+                revelationButtons.classList.add('hidden');
+            }
+            
+            // Carica messaggi
+            loadMessages();
+            
+            // Avvia polling
+            if (messageCheckInterval) {
+                clearInterval(messageCheckInterval);
+            }
+            messageCheckInterval = setInterval(loadMessages, 2000);
+        }
+
+        // Carica messaggi
+        async function loadMessages() {
+            try {
+                const data = await apiCall(`/conversations/${currentConversationId}/messages`);
+                const container = document.getElementById('messagesContainer');
+                
+                // Salva posizione scroll
+                const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+                
+                container.innerHTML = '';
+                
+                if (data.messages.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-state-text">Nessun messaggio</div><div class="empty-state-subtext">Inizia la conversazione!</div></div>';
+                    return;
+                }
+                
+                data.messages.forEach(msg => {
+                    const isSent = msg.sender_id === currentUser.userId;
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+                    
+                    messageDiv.innerHTML = `
+                        <div>${msg.message}</div>
+                        <div class="message-time">${formatTime(msg.created_at)}</div>
+                    `;
+                    
+                    container.appendChild(messageDiv);
+                });
+                
+                // Scroll automatico se eri già in fondo
+                if (wasAtBottom || data.messages.length <= 1) {
+                    container.scrollTop = container.scrollHeight;
+                }
+                
+            } catch (error) {
+                console.error('Errore caricamento messaggi:', error);
+            }
+        }
+
+        // Invia messaggio
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentConversationId) return;
+            
+            try {
+                await apiCall(`/conversations/${currentConversationId}/messages`, 'POST', { message });
+                input.value = '';
+                loadMessages();
+            } catch (error) {
+                alert(error.message || 'Errore nell\'invio del messaggio');
+            }
+        }
+
+        // Enter per inviare
+        document.getElementById('messageInput')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Rivela nome
+        async function revealName() {
+            if (!confirm('Sei sicuro di voler rivelare il tuo nome?')) return;
+            
+            try {
+                await apiCall(`/conversations/${currentConversationId}/reveal`, 'POST');
+                
+                // Ricarica conversazione
+                const data = await apiCall(`/conversations/${currentConversationId}`);
+                currentConversation = data.conversation;
+                loadChat(data.conversation);
+                
+            } catch (error) {
+                alert(error.message || 'Errore nella rivelazione del nome');
+            }
+        }
+
+        // Rivela tavolo (solo per initiator)
+        async function revealTable() {
+            if (!confirm('Sei sicuro di voler rivelare il tuo tavolo?')) return;
+            
+            try {
+                await apiCall(`/conversations/${currentConversationId}/reveal-table`, 'POST');
+                
+                // Ricarica conversazione
+                const data = await apiCall(`/conversations/${currentConversationId}`);
+                currentConversation = data.conversation;
+                loadChat(data.conversation);
+                
+            } catch (error) {
+                alert(error.message || 'Errore nella rivelazione del tavolo');
+            }
+        }
+
+        // Mostra modal segnalazione
+        function showReportModal() {
+            if (!currentConversationId) {
+                alert('Nessuna conversazione attiva');
+                return;
+            }
+            
+            const modal = document.getElementById('reportModal');
+            if (modal) {
+                modal.querySelector('.modal-content').innerHTML = `
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            <span>⚠️</span>
+                            <span>Segnala Utente</span>
+                        </div>
+                        <button class="modal-close" onclick="closeReportModal()">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="warning-message">
+                            Stai per segnalare questo utente all'amministratore. Questa azione è irreversibile.
+                        </div>
+                        <div class="form-group">
+                            <label for="reportReason">Motivo della segnalazione (opzionale)</label>
+                            <textarea id="reportReason" rows="4" placeholder="Descrivi il motivo della segnalazione..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeReportModal()">Annulla</button>
+                        <button class="btn btn-danger" onclick="submitReport()">
+                            <span>📤 Invia Segnalazione</span>
+                        </button>
+                    </div>
+                `;
+                modal.classList.add('show');
+            }
+        }
+
+        async function submitReport() {
+            const reason = document.getElementById('reportReason').value.trim();
+            
+            if (!confirm('Sei sicuro di voler segnalare questo utente?')) return;
+            
+            try {
+                await apiCall(`/conversations/${currentConversationId}/report`, 'POST', {
+                    reason: reason || null
+                });
+                
+                closeReportModal();
+                alert('Segnalazione inviata con successo. L\'amministratore verrà notificato.');
+                
+            } catch (error) {
+                alert(error.message || 'Errore nell\'invio della segnalazione');
+            }
+        }
+
+        function closeReportModal() {
+            const modal = document.getElementById('reportModal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
+        }
+
+        // Navigazione
+        function showEmailCheckScreen() {
+            sessionStorage.removeItem('pendingRegistration');
+            sessionStorage.removeItem('currentEmail');
+            document.getElementById('checkEmail').value = localStorage.getItem('meeq_email') || '';
+            showScreen('emailCheckScreen');
+        }
+
+        function showRegisterScreen() {
+            showScreen('registerScreen');
+        }
+
+        function showTableScreen() {
+            loadTables();
+            showScreen('tableScreen');
+        }
+
+        function showUsersScreen() {
+            if (currentUser && currentUser.tableNumber) {
+                loadUsers(currentUser.tableNumber);
+                showScreen('usersScreen');
+            } else {
+                showTableScreen();
+            }
+        }
+
+        function backToConversations() {
+            if (messageCheckInterval) {
+                clearInterval(messageCheckInterval);
+            }
+            loadConversations();
+        }
+
+        // Inizializzazione
+        async function init() {
+            const session = getSession();
+            
+            if (!session) {
+                // Nessuna sessione - mostra schermata check email
+                const savedEmail = localStorage.getItem('meeq_email');
+                if (savedEmail) {
+                    document.getElementById('checkEmail').value = savedEmail;
+                }
+                
+                showScreen('emailCheckScreen');
+                return;
+            }
+            
+            currentUser = session;
+            
+            // Verifica validità token
+            try {
+                await apiCall('/verify-token');
+                
+                // Token valido, vai alla schermata appropriata
+                if (currentUser.tableNumber) {
+                    // Ha già un tavolo assegnato → vai alle conversazioni
+                    loadConversations();
+                } else {
+                    // Non ha tavolo assegnato
+                    const tableFromQR = getTableFromURL();
+                    
+                    if (tableFromQR) {
+                        // C'è un QR nell'URL → assegnalo automaticamente
+                        try {
+                            await apiCall('/select-table', 'POST', { tavolo: tableFromQR });
+                            currentUser.tableNumber = tableFromQR;
+                            saveSession(currentUser);
+                            loadConversations();
+                        } catch (error) {
+                            console.error('Errore assegnazione tavolo da QR:', error);
+                            loadTables();
+                            showScreen('tableScreen');
+                        }
+                    } else {
+                        // Nessun QR → mostra schermata scelta tavoli
+                        loadTables();
+                        showScreen('tableScreen');
+                    }
+                }
+            } catch (error) {
+                // Token non valido, logout
+                clearSession();
+                showScreen('emailCheckScreen');
+            }
+        }
+
+        // Salva email per login futuro
+        document.getElementById('checkEmail')?.addEventListener('change', (e) => {
+            localStorage.setItem('meeq_email', e.target.value);
+        });
+
+        // Click fuori dal modal per chiudere
+        document.getElementById('reportModal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'reportModal') {
+                closeReportModal();
+            }
+        });
+
+        // Cleanup intervals on page unload
+        window.addEventListener('beforeunload', () => {
+            if (messageCheckInterval) clearInterval(messageCheckInterval);
+            if (conversationsCheckInterval) clearInterval(conversationsCheckInterval);
+        });
+
+        // Avvia app
+        init();
+    </script>
+</body>
+</html>

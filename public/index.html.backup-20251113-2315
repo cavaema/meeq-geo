@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeq - Connetti. Scopri. Gioca.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* HEADER */
+        .app-header {
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .app-header .logo {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .app-header .actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .icon-button {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .icon-button:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+
+        .icon-button .badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ff4757;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+        }
+
+        /* SCREENS */
+        .screen {
+            display: none;
+            padding: 20px;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* LOGIN SCREEN */
+        .login-title {
+            text-align: center;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            color: #555;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            outline: none;
+            border-color: #E91E8C;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .input-group input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .input-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(233, 30, 140, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .error-message {
+            background: #ffe0e0;
+            color: #c00;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* TABLES LIST */
+        .table-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .table-item:hover {
+            background: rgba(233, 30, 140, 0.2);
+            border-color: #E91E8C;
+            transform: translateX(5px);
+        }
+
+        .table-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: white;
+        }
+
+        .table-users-count {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* USERS LIST */
+        .user-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .user-item:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: #8B5CF6;
+            transform: translateX(5px);
+        }
+
+        .user-anonymous-name {
+            font-weight: 600;
+            flex: 1;
+            color: white;
+        }
+
+        .gender-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gender-male {
+            background: #3B82F6;
+            color: white;
+        }
+
+        .gender-female {
+            background: #E91E8C;
+            color: white;
+        }
+
+        .gender-other {
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 50%, #3B82F6 100%);
+            color: white;
+        }
+
+        /* CONVERSATIONS LIST */
+        .conversation-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            backdrop-filter: blur(10px);
+        }
+
+        .conversation-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .conversation-item.unread {
+            background: rgba(233, 30, 140, 0.15);
+            border-left: 4px solid #E91E8C;
+        }
+
+        .conversation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .conversation-user {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+        }
+
+        .conversation-time {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .conversation-preview {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .conversation-preview.pending-message {
+            color: #E91E8C;
+            font-weight: 500;
+        }
+
+        /* CHAT SCREEN */
+        .chat-header {
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .back-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .chat-user-info {
+            flex: 1;
+        }
+
+        .chat-user-name {
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+        }
+
+        .chat-status {
+            font-size: 12px;
+            opacity: 0.7;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* REVEAL BUTTONS */
+        .reveal-buttons {
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-reveal {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-reveal-name {
+            background: #10B981;
+            color: white;
+        }
+
+        .btn-reveal-name:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-reveal-name:disabled {
+            background: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.5);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-reveal-table {
+            background: #3B82F6;
+            color: white;
+        }
+
+        .btn-reveal-table:hover {
+            background: #2563EB;
+            transform: translateY(-2px);
+        }
+
+        .btn-reveal-table:disabled {
+            background: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.5);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* PENDING ACTIONS */
+        .pending-actions {
+            background: rgba(255, 193, 7, 0.1);
+            border-bottom: 1px solid rgba(255, 193, 7, 0.3);
+            padding: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-accept {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #10B981;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .btn-accept:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-reject {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #EF4444;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .btn-reject:hover {
+            background: #DC2626;
+            transform: translateY(-2px);
+        }
+
+        /* MESSAGES */
+        .messages-container {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message.sent {
+            align-items: flex-end;
+        }
+
+        .message.received {
+            align-items: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .message.sent .message-bubble {
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.received .message-bubble {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-hidden {
+            background: rgba(255, 255, 255, 0.05) !important;
+            color: rgba(255, 255, 255, 0.4) !important;
+            font-style: italic;
+        }
+
+        .message-time {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 4px;
+        }
+
+        /* MESSAGE INPUT */
+        .message-input-container {
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            color: white;
+        }
+
+        .message-input:focus {
+            border-color: #E91E8C;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .message-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .message-input:disabled {
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.3);
+            cursor: not-allowed;
+        }
+
+        .send-button {
+            width: 45px;
+            height: 45px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .send-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 20px rgba(233, 30, 140, 0.4);
+        }
+
+        .send-button:disabled {
+            background: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.5);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* UTILITIES */
+        .back-link {
+            color: #E91E8C;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #8B5CF6;
+            transform: translateX(-3px);
+        }
+
+        .screen-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 24px;
+            color: white;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            padding: 40px 20px;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #FCA5A5;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* LOADING */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #E91E8C;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER (nascosto nel login) -->
+        <div class="app-header" id="appHeader" style="display: none;">
+            <div class="logo">Meeq</div>
+            <div class="actions">
+                <button class="icon-button" id="messagesButton" onclick="showConversations()">
+                    📬
+                    <span class="badge" id="messagesBadge" style="display: none;">0</span>
+                </button>
+                <button class="icon-button" onclick="logout()">🚪</button>
+            </div>
+        </div>
+
+        <!-- LOGIN SCREEN -->
+        <div class="screen active" id="loginScreen">
+            <h1 class="login-title">🎭 Meeq</h1>
+            <div id="errorMessage"></div>
+            
+            <div class="input-group">
+                <label>Email</label>
+                <input type="email" id="emailInput" placeholder="La tua email" />
+            </div>
+
+            <div class="input-group" id="registrationFields" style="display: none;">
+                <label>Nome</label>
+                <input type="text" id="nomeInput" placeholder="Nome" />
+            </div>
+
+            <div class="input-group" id="registrationFields2" style="display: none;">
+                <label>Cognome</label>
+                <input type="text" id="cognomeInput" placeholder="Cognome" />
+            </div>
+
+            <div class="input-group" id="registrationFields3" style="display: none;">
+                <label>Genere</label>
+                <select id="genderInput">
+                    <option value="male">Uomo</option>
+                    <option value="female">Donna</option>
+                    <option value="other">Altro</option>
+                </select>
+            </div>
+
+            <div class="input-group" id="registrationFields4" style="display: none;">
+                <label>Segno distintivo (opzionale)</label>
+                <input type="text" id="distinctiveSignInput" placeholder="Es: Maglietta rossa, occhiali..." />
+            </div>
+
+            <div class="input-group" id="pinField" style="display: none;">
+                <label>PIN (ricevuto via email)</label>
+                <input type="text" id="pinInput" placeholder="123456" maxlength="6" />
+            </div>
+
+            <button class="btn btn-primary" id="checkEmailButton" onclick="checkEmail()">Continua</button>
+            <button class="btn btn-primary" id="registerButton" onclick="register()" style="display: none;">Registrati</button>
+            <button class="btn btn-primary" id="verifyPinButton" onclick="verifyPin()" style="display: none;">Verifica PIN</button>
+        </div>
+
+        <!-- TABLES SCREEN -->
+        <div class="screen" id="tablesScreen">
+            <h2 class="screen-title">Tavoli Attivi</h2>
+            <div id="tablesList"></div>
+            <div class="empty-state" id="noTables" style="display: none;">
+                <div class="empty-state-icon">🪑</div>
+                <p>Nessun tavolo attivo al momento</p>
+            </div>
+        </div>
+
+        <!-- USERS SCREEN -->
+        <div class="screen" id="usersScreen">
+            <a href="#" class="back-link" onclick="showTables()">← Torna ai tavoli</a>
+            <h2 class="screen-title" id="usersScreenTitle">Utenti</h2>
+            <div id="usersList"></div>
+            <div class="empty-state" id="noUsers" style="display: none;">
+                <div class="empty-state-icon">👤</div>
+                <p>Nessun utente connesso a questo tavolo</p>
+            </div>
+        </div>
+
+        <!-- CONVERSATIONS SCREEN -->
+        <div class="screen" id="conversationsScreen">
+            <a href="#" class="back-link" onclick="showTables()">← Torna ai tavoli</a>
+            <h2 class="screen-title">Conversazioni</h2>
+            <div id="conversationsList"></div>
+            <div class="empty-state" id="noConversations" style="display: none;">
+                <div class="empty-state-icon">💬</div>
+                <p>Nessuna conversazione attiva</p>
+            </div>
+        </div>
+
+        <!-- CHAT SCREEN -->
+        <div class="screen" id="chatScreen">
+            <div class="chat-header">
+                <button class="back-button" onclick="showConversations()">←</button>
+                <div class="chat-user-info">
+                    <div class="chat-user-name" id="chatUserName">
+                        Utente Anonimo
+                        <span id="chatUserGender"></span>
+                    </div>
+                    <div class="chat-status" id="chatStatus"></div>
+                </div>
+            </div>
+
+            <!-- PENDING ACTIONS (solo per destinatario) -->
+            <div class="pending-actions" id="pendingActions" style="display: none;">
+                <button class="btn-accept" onclick="acceptConversation()">✓ Accetta</button>
+                <button class="btn-reject" onclick="rejectConversation()">✗ Rifiuta</button>
+            </div>
+
+            <!-- REVEAL BUTTONS (solo dopo accettazione) -->
+            <div class="reveal-buttons" id="revealButtons" style="display: none;">
+                <button class="btn-reveal btn-reveal-name" id="revealNameBtn" onclick="revealName()">
+                    👤 Rivela Nome
+                </button>
+                <button class="btn-reveal btn-reveal-table" id="revealTableBtn" onclick="revealTable()">
+                    📍 Rivela Tavolo
+                </button>
+            </div>
+
+            <div class="messages-container" id="messagesContainer"></div>
+
+            <div class="message-input-container">
+                <input 
+                    type="text" 
+                    class="message-input" 
+                    id="messageInput" 
+                    placeholder="Scrivi un messaggio..."
+                    onkeypress="if(event.key==='Enter') sendMessage()"
+                />
+                <button class="send-button" onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURAZIONE
+        const API_URL = 'http://172.16.0.10:3000/api';
+        const TIMEOUT_MINUTES = 5;
+
+        // STATE
+        let token = null;
+        let currentUser = null;
+        let currentTable = null;
+        let currentConversation = null;
+        let messagesInterval = null;
+        let conversationsInterval = null;
+        let timeoutTimer = null;
+
+        // UTILITIES
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.innerHTML = `<div class="error-message">${message}</div>`;
+            setTimeout(() => errorDiv.innerHTML = '', 5000);
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            
+            // Mostra header solo se non è login
+            const header = document.getElementById('appHeader');
+            header.style.display = screenId === 'loginScreen' ? 'none' : 'flex';
+        }
+
+        function getAnonymousName(userId, conversationId) {
+            // Genera nome anonimo consistente
+            const seed = userId + (conversationId || 0);
+            return `Utente Anonimo #${seed % 1000}`;
+        }
+
+        function getGenderBadgeHTML(gender) {
+            const badges = {
+                male: '<span class="gender-badge gender-male">♂ Uomo</span>',
+                female: '<span class="gender-badge gender-female">♀ Donna</span>',
+                other: '<span class="gender-badge gender-other">⚧ Altro</span>'
+            };
+            return badges[gender] || '';
+        }
+
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'Adesso';
+            if (diff < 3600000) return `${Math.floor(diff/60000)}m fa`;
+            if (diff < 86400000) return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+        }
+
+        // TIMEOUT MANAGEMENT
+        function resetTimeout() {
+            if (timeoutTimer) clearTimeout(timeoutTimer);
+            if (token) {
+                timeoutTimer = setTimeout(() => {
+                    console.log('⏰ Timeout inattività - Logout automatico');
+                    logout();
+                }, TIMEOUT_MINUTES * 60 * 1000);
+            }
+        }
+
+        // Reset timeout su qualsiasi interazione
+        document.addEventListener('click', resetTimeout);
+        document.addEventListener('keypress', resetTimeout);
+        document.addEventListener('scroll', resetTimeout);
+
+        // API CALLS
+        async function apiCall(endpoint, options = {}) {
+            resetTimeout(); // Reset timeout ad ogni chiamata API
+            
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const response = await fetch(`${API_URL}${endpoint}`, {
+                    ...options,
+                    headers: { ...headers, ...options.headers }
+                });
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error || 'Errore nella richiesta');
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+
+        // LOGIN FLOW
+        async function checkEmail() {
+            const email = document.getElementById('emailInput').value.trim();
+            if (!email) return showError('Inserisci un\'email valida');
+
+            try {
+                const data = await apiCall('/check-email', {
+                    method: 'POST',
+                    body: JSON.stringify({ email })
+                });
+
+                if (!data.exists) {
+                    // Nuovo utente - mostra form registrazione
+                    document.getElementById('registrationFields').style.display = 'block';
+                    document.getElementById('registrationFields2').style.display = 'block';
+                    document.getElementById('registrationFields3').style.display = 'block';
+                    document.getElementById('registrationFields4').style.display = 'block';
+                    document.getElementById('registerButton').style.display = 'block';
+                    document.getElementById('checkEmailButton').style.display = 'none';
+                } else {
+                    // Utente esistente - mostra campo PIN
+                    document.getElementById('pinField').style.display = 'block';
+                    document.getElementById('verifyPinButton').style.display = 'block';
+                    document.getElementById('checkEmailButton').style.display = 'none';
+                }
+            } catch (error) {
+                showError('Errore nella verifica email');
+            }
+        }
+
+        async function register() {
+            const email = document.getElementById('emailInput').value.trim();
+            const nome = document.getElementById('nomeInput').value.trim();
+            const cognome = document.getElementById('cognomeInput').value.trim();
+            const gender = document.getElementById('genderInput').value;
+            const distinctive_sign = document.getElementById('distinctiveSignInput').value.trim();
+
+            if (!email || !nome || !cognome) {
+                return showError('Compila tutti i campi obbligatori');
+            }
+
+            try {
+                await apiCall('/register', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, nome, cognome, gender, distinctive_sign })
+                });
+
+                alert('Registrazione completata! Controlla la tua email per il PIN.');
+                
+                // Mostra campo PIN
+                document.getElementById('registrationFields').style.display = 'none';
+                document.getElementById('registrationFields2').style.display = 'none';
+                document.getElementById('registrationFields3').style.display = 'none';
+                document.getElementById('registrationFields4').style.display = 'none';
+                document.getElementById('registerButton').style.display = 'none';
+                document.getElementById('pinField').style.display = 'block';
+                document.getElementById('verifyPinButton').style.display = 'block';
+            } catch (error) {
+                showError('Errore nella registrazione');
+            }
+        }
+
+        async function verifyPin() {
+            const email = document.getElementById('emailInput').value.trim();
+            const pin = document.getElementById('pinInput').value.trim();
+
+            if (!email || !pin) return showError('Inserisci email e PIN');
+
+            try {
+                const data = await apiCall('/verify-pin', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, pin })
+                });
+
+                token = data.token;
+                currentUser = data.user;
+
+                // Verifica se c'è un tavolo assegnato via QR
+                const urlParams = new URLSearchParams(window.location.search);
+                const tableId = urlParams.get('tavolo');
+
+                if (tableId && !currentUser.tavolo) {
+                    await selectTable(tableId);
+                } else {
+                    showTables();
+                }
+
+                resetTimeout(); // Avvia timeout
+            } catch (error) {
+                showError('PIN non valido');
+            }
+        }
+
+        async function selectTable(tableId) {
+            try {
+                await apiCall('/select-table', {
+                    method: 'POST',
+                    body: JSON.stringify({ tavolo: tableId })
+                });
+
+                currentUser.tavolo = tableId;
+                showTables();
+            } catch (error) {
+                showError('Errore nell\'assegnazione tavolo');
+            }
+        }
+
+        function logout() {
+            if (timeoutTimer) clearTimeout(timeoutTimer);
+            if (messagesInterval) clearInterval(messagesInterval);
+            if (conversationsInterval) clearInterval(conversationsInterval);
+            
+            apiCall('/logout', { method: 'POST' }).catch(() => {});
+            
+            token = null;
+            currentUser = null;
+            currentTable = null;
+            currentConversation = null;
+            
+            document.getElementById('emailInput').value = '';
+            document.getElementById('pinInput').value = '';
+            showScreen('loginScreen');
+        }
+
+        // TABLES
+        async function showTables() {
+            showScreen('tablesScreen');
+            loadTables();
+            startConversationsPolling(); // Controlla nuove conversazioni
+        }
+
+        async function loadTables() {
+            try {
+                const data = await apiCall('/tables/active');
+                const tablesList = document.getElementById('tablesList');
+                const noTables = document.getElementById('noTables');
+
+                // Filtra tavoli (escludi il mio)
+                const otherTables = data.tables.filter(t => t.room_id !== currentUser.tavolo);
+
+                if (otherTables.length === 0) {
+                    tablesList.innerHTML = '';
+                    noTables.style.display = 'block';
+                    return;
+                }
+
+                noTables.style.display = 'none';
+                tablesList.innerHTML = otherTables.map(table => `
+                    <div class="table-item" onclick="showUsers('${table.room_id}')">
+                        <div class="table-name">${table.room_id}</div>
+                        <div class="table-users-count">${table.user_count} utenti</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Errore caricamento tavoli:', error);
+            }
+        }
+
+        // USERS
+        async function showUsers(tableId) {
+            currentTable = tableId;
+            showScreen('usersScreen');
+            document.getElementById('usersScreenTitle').textContent = `Utenti - ${tableId}`;
+            loadUsers(tableId);
+        }
+
+        async function loadUsers(tableId) {
+            try {
+                const data = await apiCall(`/tables/${tableId}/users`);
+                const usersList = document.getElementById('usersList');
+                const noUsers = document.getElementById('noUsers');
+
+                if (data.users.length === 0) {
+                    usersList.innerHTML = '';
+                    noUsers.style.display = 'block';
+                    return;
+                }
+
+                noUsers.style.display = 'none';
+                usersList.innerHTML = data.users.map(user => `
+                    <div class="user-item" onclick="startConversation(${user.id})">
+                        <div class="user-anonymous-name">${getAnonymousName(user.id)}</div>
+                        ${getGenderBadgeHTML(user.gender)}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Errore caricamento utenti:', error);
+            }
+        }
+
+        // CONVERSATIONS
+        async function startConversation(recipientId) {
+            try {
+                const data = await apiCall('/conversations', {
+                    method: 'POST',
+                    body: JSON.stringify({ recipientId })
+                });
+
+                // Apri direttamente la chat
+                currentConversation = data;
+                showChat();
+            } catch (error) {
+                console.error('Errore creazione conversazione:', error);
+                showError('Errore nell\'avvio della conversazione');
+            }
+        }
+
+        async function showConversations() {
+            showScreen('conversationsScreen');
+            loadConversations();
+        }
+
+        async function loadConversations() {
+            try {
+                const conversations = await apiCall('/conversations');
+                const conversationsList = document.getElementById('conversationsList');
+                const noConversations = document.getElementById('noConversations');
+
+                if (conversations.length === 0) {
+                    conversationsList.innerHTML = '';
+                    noConversations.style.display = 'block';
+                    updateBadge(0);
+                    return;
+                }
+
+                noConversations.style.display = 'none';
+
+                // Conta non lette (pending dove NON sei initiator)
+                const unreadCount = conversations.filter(c => 
+                    c.status === 'pending' && c.initiator_id !== currentUser.userId
+                ).length;
+                updateBadge(unreadCount);
+
+                // Ordina: pending prima, poi per data
+                conversations.sort((a, b) => {
+                    if (a.status === 'pending' && b.status !== 'pending') return -1;
+                    if (a.status !== 'pending' && b.status === 'pending') return 1;
+                    return new Date(b.updated_at) - new Date(a.updated_at);
+                });
+
+                conversationsList.innerHTML = conversations.map(conv => {
+                    const isInitiator = conv.initiator_id === currentUser.userId;
+                    const isPending = conv.status === 'pending';
+                    const isUnread = isPending && !isInitiator;
+                    
+                    // Determina nome da mostrare
+                    let displayName = `Tavolo ${conv.otherUser.tavolo}`;
+                    
+                    if (conv.status === 'accepted') {
+                        const nameRevealed = isInitiator ? conv.user2_name_revealed : conv.user1_name_revealed;
+                        if (nameRevealed) {
+                            displayName = `${conv.otherUser.nome} ${conv.otherUser.cognome}`;
+                        }
+                    }
+
+                    return `
+                        <div class="conversation-item ${isUnread ? 'unread' : ''}" onclick='openConversation(${JSON.stringify(conv)})'>
+                            <div class="conversation-header">
+                                <div class="conversation-user">
+                                    ${displayName}
+                                    ${getGenderBadgeHTML(conv.otherUser.gender)}
+                                </div>
+                                <div class="conversation-time">${formatTime(conv.updated_at)}</div>
+                            </div>
+                            <div class="conversation-preview ${isPending && !isInitiator ? 'pending-message' : ''}">
+                                ${isPending && !isInitiator ? '📩 Nuovo messaggio in attesa...' : 'Clicca per aprire'}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Errore caricamento conversazioni:', error);
+            }
+        }
+
+        function openConversation(conv) {
+            currentConversation = conv;
+            showChat();
+        }
+
+        function startConversationsPolling() {
+            if (conversationsInterval) clearInterval(conversationsInterval);
+            conversationsInterval = setInterval(async () => {
+                try {
+                    const conversations = await apiCall('/conversations');
+                    const unreadCount = conversations.filter(c => 
+                        c.status === 'pending' && c.initiator_id !== currentUser.userId
+                    ).length;
+                    updateBadge(unreadCount);
+                } catch (error) {
+                    console.error('Errore polling conversazioni:', error);
+                }
+            }, 3000);
+        }
+
+        function updateBadge(count) {
+            const badge = document.getElementById('messagesBadge');
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        // CHAT
+        function showChat() {
+            showScreen('chatScreen');
+            updateChatHeader();
+            loadMessages();
+            startMessagesPolling();
+        }
+
+        function updateChatHeader() {
+            const isInitiator = currentConversation.initiator_id === currentUser.userId;
+            const isPending = currentConversation.status === 'pending';
+            const isAccepted = currentConversation.status === 'accepted';
+
+            // Nome da mostrare
+            let displayName = getAnonymousName(currentConversation.otherUser.id, currentConversation.id);
+            
+            if (isAccepted) {
+                const nameRevealed = isInitiator ? currentConversation.user2_name_revealed : currentConversation.user1_name_revealed;
+                if (nameRevealed) {
+                    displayName = `${currentConversation.otherUser.nome} ${currentConversation.otherUser.cognome}`;
+                }
+
+                const tableRevealed = isInitiator ? currentConversation.user2_table_revealed : currentConversation.user1_table_revealed;
+                if (tableRevealed) {
+                    displayName += ` - Tavolo ${currentConversation.otherUser.tavolo}`;
+                }
+            }
+
+            document.getElementById('chatUserName').innerHTML = `
+                ${displayName}
+                ${getGenderBadgeHTML(currentConversation.otherUser.gender)}
+            `;
+
+            // Status
+            let status = '';
+            if (isPending) {
+                status = isInitiator ? '✉️ Richiesta inviata (puoi già scrivere)' : '⏳ In attesa di accettazione';
+            } else {
+                status = '✓ Chat attiva';
+            }
+            document.getElementById('chatStatus').textContent = status;
+
+            // Mostra/nascondi pulsanti
+            const pendingActions = document.getElementById('pendingActions');
+            const revealButtons = document.getElementById('revealButtons');
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.querySelector('.send-button');
+
+            if (isPending && !isInitiator) {
+                // Destinatario: mostra bottoni accetta/rifiuta
+                pendingActions.style.display = 'flex';
+                revealButtons.style.display = 'none';
+                messageInput.disabled = true;
+                messageInput.placeholder = '⏳ Accetta la conversazione per rispondere';
+                sendButton.disabled = true;
+            } else if (isAccepted) {
+                // Conversazione accettata: mostra pulsanti rivelazione
+                pendingActions.style.display = 'none';
+                revealButtons.style.display = 'flex';
+                messageInput.disabled = false;
+                messageInput.placeholder = 'Scrivi un messaggio...';
+                sendButton.disabled = false;
+
+                // Aggiorna stato pulsanti rivelazione
+                const myNameRevealed = isInitiator ? currentConversation.user1_name_revealed : currentConversation.user2_name_revealed;
+                const myTableRevealed = isInitiator ? currentConversation.user1_table_revealed : currentConversation.user2_table_revealed;
+
+                const revealNameBtn = document.getElementById('revealNameBtn');
+                const revealTableBtn = document.getElementById('revealTableBtn');
+
+                revealNameBtn.disabled = myNameRevealed;
+                revealNameBtn.textContent = myNameRevealed ? '✓ Nome Rivelato' : '👤 Rivela Nome';
+
+                revealTableBtn.disabled = myTableRevealed;
+                revealTableBtn.textContent = myTableRevealed ? '✓ Tavolo Rivelato' : '📍 Rivela Tavolo';
+            } else {
+                // Mittente in pending: può scrivere
+                pendingActions.style.display = 'none';
+                revealButtons.style.display = 'none';
+                messageInput.disabled = false;
+                messageInput.placeholder = 'Scrivi un messaggio...';
+                sendButton.disabled = false;
+            }
+        }
+
+        async function loadMessages() {
+            try {
+                const data = await apiCall(`/conversations/${currentConversation.id}/messages`);
+                const container = document.getElementById('messagesContainer');
+
+                const isInitiator = currentConversation.initiator_id === currentUser.userId;
+                const isPending = currentConversation.status === 'pending';
+                const shouldHideMessages = isPending && !isInitiator;
+
+                if (data.messages.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>Nessun messaggio</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.messages.map(msg => {
+                    const isSent = msg.sender_id === currentUser.userId;
+                    const isHidden = shouldHideMessages && !isSent;
+
+                    return `
+                        <div class="message ${isSent ? 'sent' : 'received'}">
+                            <div class="message-bubble ${isHidden ? 'message-hidden' : ''}">
+                                ${isHidden ? '🔒 Messaggio nascosto (Accetta per leggere)' : msg.message}
+                            </div>
+                            <div class="message-time">${formatTime(msg.created_at)}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            } catch (error) {
+                console.error('Errore caricamento messaggi:', error);
+            }
+        }
+
+        function startMessagesPolling() {
+            if (messagesInterval) clearInterval(messagesInterval);
+            messagesInterval = setInterval(loadMessages, 2000);
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            try {
+                await apiCall('/messages', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        conversationId: currentConversation.id,
+                        recipientId: currentConversation.otherUser.id,
+                        message
+                    })
+                });
+
+                input.value = '';
+                loadMessages();
+            } catch (error) {
+                console.error('Errore invio messaggio:', error);
+                showError('Errore nell\'invio del messaggio');
+            }
+        }
+
+        async function acceptConversation() {
+            try {
+                await apiCall(`/conversations/${currentConversation.id}/accept`, {
+                    method: 'PATCH'
+                });
+
+                currentConversation.status = 'accepted';
+                updateChatHeader();
+                loadMessages();
+            } catch (error) {
+                console.error('Errore accettazione conversazione:', error);
+                showError('Errore nell\'accettazione');
+            }
+        }
+
+        async function rejectConversation() {
+            try {
+                await apiCall(`/conversations/${currentConversation.id}/reject`, {
+                    method: 'PATCH'
+                });
+
+                showConversations();
+            } catch (error) {
+                console.error('Errore rifiuto conversazione:', error);
+                showError('Errore nel rifiuto');
+            }
+        }
+
+        async function revealName() {
+            try {
+                await apiCall(`/conversations/${currentConversation.id}/reveal-name`, {
+                    method: 'POST'
+                });
+
+                const isInitiator = currentConversation.initiator_id === currentUser.userId;
+                if (isInitiator) {
+                    currentConversation.user1_name_revealed = true;
+                } else {
+                    currentConversation.user2_name_revealed = true;
+                }
+
+                updateChatHeader();
+                alert('Nome rivelato!');
+            } catch (error) {
+                console.error('Errore rivelazione nome:', error);
+                showError('Errore nella rivelazione del nome');
+            }
+        }
+
+        async function revealTable() {
+            try {
+                await apiCall(`/conversations/${currentConversation.id}/reveal-table`, {
+                    method: 'POST'
+                });
+
+                const isInitiator = currentConversation.initiator_id === currentUser.userId;
+                if (isInitiator) {
+                    currentConversation.user1_table_revealed = true;
+                } else {
+                    currentConversation.user2_table_revealed = true;
+                }
+
+                updateChatHeader();
+                alert('Tavolo rivelato!');
+            } catch (error) {
+                console.error('Errore rivelazione tavolo:', error);
+                showError('Errore nella rivelazione del tavolo');
+            }
+        }
+
+        // INIT
+        resetTimeout();
+    </script>
+</body>
+</html>
