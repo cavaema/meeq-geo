@@ -1179,14 +1179,31 @@ app.post('/api/verify-pin', async (req, res) => {
 app.post('/api/auto-login', async (req, res) => {
   const { centralToken } = req.body;
 
+  console.log('🔍 [AUTO-LOGIN] Richiesta ricevuta:', {
+    hasToken: !!centralToken,
+    tokenLength: centralToken?.length || 0,
+    headers: {
+      origin: req.headers.origin,
+      'user-agent': req.headers['user-agent']?.substring(0, 50)
+    }
+  });
+
   if (!centralToken) {
+    console.log('❌ [AUTO-LOGIN] Token centrale mancante');
     return res.status(400).json({ error: 'Token centrale richiesto' });
   }
 
   // Verifica token con server centrale
   if (USE_CENTRAL_SERVER && VENUE_API_KEY) {
     try {
+      console.log('🔍 [AUTO-LOGIN] Verifica token con server centrale...');
       const centralResult = await callCentralServer('/api/central/verify-token', 'POST', { token: centralToken });
+      console.log('🔍 [AUTO-LOGIN] Risposta server centrale:', {
+        valid: centralResult.valid,
+        hasUser: !!centralResult.user,
+        error: centralResult.error,
+        fallback: centralResult.fallback
+      });
       
       if (!centralResult.fallback && !centralResult.error && centralResult.valid) {
         const centralUser = centralResult.user;
@@ -1214,7 +1231,13 @@ app.post('/api/auto-login', async (req, res) => {
               return res.status(500).json({ error: 'Errore database' });
             }
 
-            console.log(`✅ Auto-login: ${centralUser.nome} ${centralUser.cognome} (central ID: ${centralUser.id}, local ID: ${localUserId})`);
+            console.log(`✅ [AUTO-LOGIN] Login completato: ${centralUser.nome} ${centralUser.cognome} (central ID: ${centralUser.id}, local ID: ${localUserId})`);
+
+            console.log('📤 [AUTO-LOGIN] Invio risposta:', {
+              success: true,
+              hasToken: !!localToken,
+              userId: localUserId
+            });
 
             res.json({
               success: true,
@@ -1232,17 +1255,22 @@ app.post('/api/auto-login', async (req, res) => {
             });
           });
         } catch (cacheError) {
-          console.error('Errore salvataggio cache locale:', cacheError);
+          console.error('❌ [AUTO-LOGIN] Errore salvataggio cache locale:', cacheError);
           return res.status(500).json({ error: 'Errore salvataggio cache' });
         }
       } else {
+        console.log('❌ [AUTO-LOGIN] Token centrale non valido');
         return res.status(401).json({ error: 'Token centrale non valido' });
       }
     } catch (error) {
-      console.error('Errore verifica token centrale:', error);
+      console.error('❌ [AUTO-LOGIN] Errore verifica token centrale:', error);
       return res.status(500).json({ error: 'Errore verifica token' });
     }
   } else {
+    console.log('❌ [AUTO-LOGIN] Server centrale non configurato', {
+      USE_CENTRAL_SERVER,
+      hasVenueApiKey: !!VENUE_API_KEY
+    });
     return res.status(503).json({ error: 'Server centrale non configurato' });
   }
 });
