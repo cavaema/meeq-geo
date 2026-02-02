@@ -217,17 +217,17 @@ function initDatabase() {
         FOREIGN KEY (initiator_id) REFERENCES users(id)
       )
     `);
-    
+
     // 🆕 Aggiungi initiator_id se non esiste (migrazione)
     db.all("PRAGMA table_info(conversations)", (err, columns) => {
       if (err) {
         console.error('Errore verifica colonne:', err);
         return;
       }
-      
+
       // Verifica se initiator_id esiste già
       const hasInitiatorId = columns && columns.some(col => col.name === 'initiator_id');
-      
+
       if (!hasInitiatorId) {
         db.run(`ALTER TABLE conversations ADD COLUMN initiator_id INTEGER`, (alterErr) => {
           if (alterErr) {
@@ -476,7 +476,7 @@ function authenticateToken(req, res, next) {
       return res.status(403).json({ error: 'Token non valido' });
     }
     req.user = user;
-    
+
     // Aggiorna last_activity automaticamente ad ogni richiesta autenticata
     if (user.userId) {
       db.run(
@@ -487,7 +487,7 @@ function authenticateToken(req, res, next) {
         }
       );
     }
-    
+
     next();
   });
 }
@@ -535,7 +535,7 @@ function checkInactiveUsers() {
            OR last_activity < datetime('now', '-10 minutes'))
   `;
 
-  db.run(query, [], function(err) {
+  db.run(query, [], function (err) {
     if (err) {
       console.error('❌ Errore controllo utenti inattivi:', err);
     } else if (this.changes > 0) {
@@ -623,7 +623,7 @@ async function callCentralServer(endpoint, method = 'GET', body = null) {
 // Verifica token con server centrale
 async function verifyTokenWithCentral(token) {
   const result = await callCentralServer('/api/central/verify-token', 'POST', { token });
-  
+
   if (result.fallback || result.error) {
     return null; // Fallback a verifica locale
   }
@@ -643,7 +643,7 @@ async function sendVenueHeartbeatToCentral() {
     };
     console.log(`📡 Invio heartbeat al centrale: ${CENTRAL_SERVER_URL}/api/central/venues/heartbeat`);
     const result = await callCentralServer('/api/central/venues/heartbeat', 'POST', payload);
-    
+
     if (result.fallback) {
       console.error('❌ Heartbeat fallito (fallback):', result.error || 'Errore sconosciuto');
     } else if (result.success) {
@@ -676,10 +676,10 @@ function saveUserToLocalCache(centralUser, distinctiveSign = null) {
             synced_at = CURRENT_TIMESTAMP
             ${distinctiveSign !== null ? ', distinctive_sign = ?' : ''}
            WHERE central_user_id = ?`,
-          distinctiveSign !== null 
+          distinctiveSign !== null
             ? [centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, distinctiveSign, centralUser.id]
             : [centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, centralUser.id],
-          function(updateErr) {
+          function (updateErr) {
             if (updateErr) {
               return reject(updateErr);
             }
@@ -704,7 +704,7 @@ function saveUserToLocalCache(centralUser, distinctiveSign = null) {
               distinctiveSign !== null
                 ? [centralUser.id, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, distinctiveSign, emailUser.id]
                 : [centralUser.id, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, emailUser.id],
-              function(updateErr) {
+              function (updateErr) {
                 if (updateErr) {
                   return reject(updateErr);
                 }
@@ -718,7 +718,7 @@ function saveUserToLocalCache(centralUser, distinctiveSign = null) {
               `INSERT INTO users (central_user_id, email, nome, cognome, gender, newsletter, distinctive_sign, synced_at) 
                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
               [centralUser.id, centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, distinctiveSign],
-              function(insertErr) {
+              function (insertErr) {
                 if (insertErr) {
                   return reject(insertErr);
                 }
@@ -843,7 +843,7 @@ app.post('/api/check-email', async (req, res) => {
   if (USE_CENTRAL_SERVER && VENUE_API_KEY) {
     try {
       const result = await callCentralServer('/api/central/check-email', 'POST', { email });
-      
+
       if (!result.fallback && !result.error) {
         // Server centrale risponde correttamente
         return res.json(result);
@@ -865,7 +865,7 @@ app.post('/api/check-email', async (req, res) => {
     if (user) {
       // Utente esiste in cache locale - genera nuovo PIN
       const pin = generatePIN();
-      
+
       // Rimuovi vecchie pending registrations per questa email
       db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
 
@@ -984,7 +984,7 @@ app.post('/api/verify-pin', async (req, res) => {
   if (USE_CENTRAL_SERVER && VENUE_API_KEY) {
     try {
       const result = await callCentralServer('/api/central/verify-pin', 'POST', { email, pin });
-      
+
       if (!result.fallback && !result.error && result.success) {
         // Server centrale ha verificato correttamente il PIN
         const centralUser = result.user;
@@ -994,13 +994,13 @@ app.post('/api/verify-pin', async (req, res) => {
         // Salva/aggiorna utente in cache locale
         try {
           const localUserId = await saveUserToLocalCache(centralUser, normalizedDistinctiveSign);
-          
+
           // Aggiorna stato login locale
           if (normalizedDistinctiveSign !== null) {
-          db.run(
-            'UPDATE users SET logged_in = 1, last_activity = CURRENT_TIMESTAMP, distinctive_sign = ? WHERE id = ?',
+            db.run(
+              'UPDATE users SET logged_in = 1, last_activity = CURRENT_TIMESTAMP, distinctive_sign = ? WHERE id = ?',
               [normalizedDistinctiveSign, localUserId]
-          );
+            );
           } else {
             db.run(
               'UPDATE users SET logged_in = 1, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
@@ -1204,14 +1204,14 @@ app.post('/api/auto-login', async (req, res) => {
         error: centralResult.error,
         fallback: centralResult.fallback
       });
-      
+
       if (!centralResult.fallback && !centralResult.error && centralResult.valid) {
         const centralUser = centralResult.user;
-        
+
         // Salva/aggiorna utente in cache locale
         try {
           const localUserId = await saveUserToLocalCache(centralUser, null);
-          
+
           // Aggiorna stato login locale
           db.run(
             'UPDATE users SET logged_in = 1, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
@@ -1355,7 +1355,7 @@ app.post('/api/refresh-session', async (req, res) => {
 // 🆕 Verifica token e sincronizza stato utente
 app.get('/api/verify-token', authenticateToken, (req, res) => {
   const userId = req.user.userId;
-  
+
   // Verifica se l'utente è ancora loggato nel database
   db.get(
     'SELECT id, email, nome, cognome, tavolo, logged_in, last_activity FROM users WHERE id = ?',
@@ -1365,16 +1365,16 @@ app.get('/api/verify-token', authenticateToken, (req, res) => {
         console.error('Errore verifica utente:', err);
         return res.status(500).json({ error: 'Errore database' });
       }
-      
+
       if (!user) {
         return res.status(404).json({ error: 'Utente non trovato' });
       }
-      
+
       // 🆕 Se l'utente è stato disconnesso ma rientra entro 10 minuti, ripristina sessione
       const lastActivity = new Date(user.last_activity);
       const now = new Date();
       const minutesSinceActivity = (now - lastActivity) / (1000 * 60);
-      
+
       if (user.logged_in === 0 && minutesSinceActivity < 10) {
         // Ripristina sessione se rientra entro 10 minuti
         db.run(
@@ -1390,15 +1390,15 @@ app.get('/api/verify-token', authenticateToken, (req, res) => {
         );
         user.logged_in = 1;
       }
-      
+
       // Se l'utente non è loggato e sono passati più di 10 minuti, token non valido
       if (user.logged_in === 0 && minutesSinceActivity >= 10) {
         return res.status(401).json({ error: 'Sessione scaduta' });
       }
-      
+
       // Ritorna dati utente sincronizzati
-      res.json({ 
-        valid: true, 
+      res.json({
+        valid: true,
         userId: user.id,
         user: {
           id: user.id,
@@ -1415,8 +1415,8 @@ app.get('/api/verify-token', authenticateToken, (req, res) => {
 // 🆕 Heartbeat - mantiene la sessione attiva (chiamato periodicamente dal client)
 app.get('/api/heartbeat', authenticateToken, (req, res) => {
   // last_activity viene già aggiornato dal middleware authenticateToken
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'Sessione attiva',
     timestamp: new Date().toISOString()
   });
@@ -1440,7 +1440,7 @@ app.post('/api/distinctive-sign', authenticateToken, (req, res) => {
   db.run(
     'UPDATE users SET distinctive_sign = ?, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
     [value, userId],
-    function(err) {
+    function (err) {
       if (err) {
         console.error('Errore aggiornamento distinctive_sign:', err);
         return res.status(500).json({ error: 'Errore database' });
@@ -1502,7 +1502,7 @@ app.post('/api/update-table', authenticateToken, (req, res) => {
 app.post('/api/logout', authenticateToken, (req, res) => {
   const userId = req.user.userId;
   console.log(`🚪 Logout richiesto per utente ID: ${userId}`);
-  
+
   db.run(
     'UPDATE users SET logged_in = 0, tavolo = NULL, last_activity = datetime("now", "-1 hour") WHERE id = ?',
     [userId],
@@ -1517,7 +1517,7 @@ app.post('/api/logout', authenticateToken, (req, res) => {
       } else {
         console.log(`✅ Utente disconnesso: ID ${userId} (changes: ${this.changes})`);
       }
-      
+
       res.json({ message: 'Logout effettuato' });
     }
   );
@@ -1625,7 +1625,7 @@ function sendPushNotification(userId, title, body, data = {}) {
           })
           .catch((error) => {
             console.error(`❌ Errore invio notifica a utente ID: ${userId}:`, error);
-            
+
             // Se la subscription non è più valida, rimuovila
             if (error.statusCode === 410 || error.statusCode === 404) {
               db.run(
@@ -1896,7 +1896,7 @@ app.get('/api/conversations', authenticateToken, (req, res) => {
         user2_name_revealed: conv.user2_name_revealed === 1,
         user1_table_revealed: conv.user1_table_revealed === 1,
         user2_table_revealed: conv.user2_table_revealed === 1,
-	otherUser: otherUser,
+        otherUser: otherUser,
         myRevealed: myRevealed,
         theirRevealed: theirRevealed,
         unreadCount: conv.unread_count || 0,
@@ -2044,9 +2044,9 @@ app.post('/api/conversations', authenticateToken, (req, res) => {
 
       if (block) {
         console.log(`🚫 Tentativo conversazione bloccato: User ${userId} con User ${recipientId}`);
-        return res.status(403).json({ 
+        return res.status(403).json({
           error: 'Impossibile avviare conversazione',
-          message: 'Questo utente ha rifiutato la tua richiesta di conversazione. Potrai riprovare dopo il reset giornaliero.' 
+          message: 'Questo utente ha rifiutato la tua richiesta di conversazione. Potrai riprovare dopo il reset giornaliero.'
         });
       }
 
@@ -2264,7 +2264,7 @@ app.post('/api/conversations/:conversationId/accept', authenticateToken, (req, r
           }
 
           console.log(`✅ Conversazione ${conversationId} accettata da user ${userId}`);
-          
+
           // 🆕 PROBLEMA 2: Ritorna conversazione completa aggiornata
           const query = `
             SELECT 
@@ -2429,11 +2429,11 @@ app.post('/api/conversations/:conversationId/reject', authenticateToken, (req, r
                   }
 
                   console.log(`❌ Conversazione ${conversationId} rifiutata da user ${userId}`);
-                  
+
                   // 🆕 NOTIFICA AL MITTENTE
                   // Il frontend mostrerà un messaggio quando il mittente proverà a caricare le conversazioni
-                  res.json({ 
-                    success: true, 
+                  res.json({
+                    success: true,
                     status: 'rejected',
                     message: 'Conversazione rifiutata. L\'utente è stato bloccato fino al reset giornaliero.',
                     initiatorId: initiatorId // Per permettere al frontend di notificare se necessario
@@ -2773,7 +2773,7 @@ app.get('/api/admin/stats', authenticateAdminJWT, (req, res) => {
       "SELECT COUNT(*) as count FROM users WHERE logged_in = 1 AND datetime(last_activity, '+30 minutes') > datetime('now')",
       (err, result) => {
         stats.onlineUsers = result ? result.count : 0;
-        
+
         // 🆕 Pulisci utenti con logged_in = 1 ma last_activity scaduta (dovrebbero essere offline)
         // Usa due controlli per sicurezza: uno con datetime() e uno con confronto diretto
         db.run(
@@ -2968,9 +2968,9 @@ app.get('/api/admin/server-ip', authenticateAdminJWT, (req, res) => {
 // Reset manuale (admin)
 app.post('/api/admin/reset', authenticateAdminJWT, (req, res) => {
   console.log('🔄 Reset manuale richiesto da admin');
-  
+
   resetDaily();
-  
+
   res.json({
     success: true,
     message: 'Reset in corso. Il database verrà pulito e verrà creato un backup.'
@@ -2988,7 +2988,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📍 Server in ascolto sulla porta ${PORT}`);
   console.log(`🌐 Accessibile da: http://172.16.0.10:${PORT}`);
   console.log(`⏰ Reset giornaliero: 4:00 AM`);
-  
+
   // Conta backup esistenti
   fs.readdir(BACKUP_DIR, (err, files) => {
     if (!err) {
@@ -2996,7 +2996,7 @@ app.listen(PORT, '0.0.0.0', () => {
       console.log(`📊 Backup attivi: ${backupFiles.length}`);
     }
   });
-  
+
   console.log(`🔒 Sistema backup attivo: conservazione 30 giorni`);
   console.log('='.repeat(60));
 });
