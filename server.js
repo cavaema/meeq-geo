@@ -87,14 +87,38 @@ app.use((req, res, next) => {
 // ============================================================================
 // VENUE / LANDING - Multi-locale (gestione venues nel DB)
 // ============================================================================
-// API venue per ID
+function normalizeSlug(s) {
+  if (!s || typeof s !== 'string') return '';
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+// API venue per ID o slug
 app.get('/api/venue/:venueId', (req, res) => {
-  const venueId = req.params.venueId;
+  const venueId = (req.params.venueId || '').trim();
   const bySlug = isNaN(parseInt(venueId, 10));
-  const sql = bySlug
-    ? 'SELECT * FROM venues WHERE slug = ? AND active = 1'
-    : 'SELECT * FROM venues WHERE id = ? AND active = 1';
-  db.get(sql, [venueId], (err, v) => {
+  const fetchVenue = (cb) => {
+    if (bySlug) {
+      db.all('SELECT * FROM venues WHERE active = 1', [], (err, rows) => {
+        if (err) return cb(err, null);
+        const exact = (rows || []).find(r => r.slug === venueId);
+        if (exact) return cb(null, exact);
+        const decoded = (() => { try { return decodeURIComponent(venueId); } catch (_) { return venueId; } })();
+        const norm = normalizeSlug(decoded);
+        if (!norm) return cb(null, null);
+        const match = (rows || []).find(r => normalizeSlug(r.slug) === norm || normalizeSlug(r.name) === norm);
+        return cb(null, match || null);
+      });
+    } else {
+      db.get('SELECT * FROM venues WHERE id = ? AND active = 1', [venueId], (err, v) => cb(err, v));
+    }
+  };
+  fetchVenue((err, v) => {
     if (err) return res.status(500).json({ error: 'Errore database' });
     if (!v) return res.status(404).json({ error: 'Locale non trovato' });
     const geo = (v.latitude != null && v.longitude != null) ? {
