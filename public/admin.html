@@ -166,6 +166,33 @@ loadVenues();
 }catch(err){alert('Errore salvataggio locale');}
 };
 
+const printVenueQR=async(venue)=>{
+const baseURL=window.location.origin;
+const qrURL=baseURL+'/venue/'+(venue.slug||venue.id);
+const div=document.createElement('div');
+div.style.display='none';
+document.body.appendChild(div);
+try{
+new QRCode(div,{text:qrURL,width:400,height:400});
+await new Promise(r=>setTimeout(r,300));
+const canvas=div.querySelector('canvas');
+if(!canvas){alert('Errore generazione QR');document.body.removeChild(div);return;}
+const dataURL=canvas.toDataURL();
+document.body.removeChild(div);
+const w=window.open('','_blank');
+w.document.write('<html><head><title>QR '+venue.name+'</title>');
+w.document.write('<style>body{margin:0;font-family:Arial;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px}.qr-title{font-size:32px;font-weight:900;color:#E91E8C;margin-bottom:16px}.qr-subtitle{font-size:18px;color:#666;margin-bottom:24px}.qr-url{font-size:12px;color:#999;word-break:break-all;margin-top:16px}@media print{body{-webkit-print-color-adjust:exact}}</style>');
+w.document.write('</head><body>');
+w.document.write('<div class="qr-title">meeq</div>');
+w.document.write('<div class="qr-subtitle">'+venue.name+'</div>');
+w.document.write('<div><img src="'+dataURL+'" width="300" height="300" alt="QR"/></div>');
+w.document.write('<div class="qr-url">'+qrURL+'</div>');
+w.document.write('</body></html>');
+w.document.close();
+setTimeout(()=>w.print(),500);
+}catch(err){alert('Errore: '+err.message);if(document.body.contains(div))document.body.removeChild(div);}
+};
+
 const deleteUser=async(userId)=>{
 if(!confirm('Sei sicuro di voler eliminare questo utente?'))return;
 try{
@@ -344,6 +371,7 @@ return(
 <td className="p-2"><div className="flex flex-wrap gap-2">
 <a href={`${window.location.origin}/venue/${v.id}`} target="_blank" rel="noopener" className="text-blue-600 hover:underline">Landing</a>
 <a href={`${window.location.origin}/app?venue=${v.id}`} target="_blank" rel="noopener" className="text-green-600 hover:underline">App</a>
+<button type="button" onClick={()=>printVenueQR(v)} className="text-purple-600 hover:underline font-semibold">Stampa QR</button>
 <button type="button" onClick={()=>setVenueForm({id:v.id,name:v.name,slug:v.slug,logo_url:v.logo_url,menu_url:v.menu_url,latitude:v.latitude,longitude:v.longitude,radius_meters:v.radius_meters,central_api_key:v.central_api_key,active:v.active})} className="text-pink-600 hover:underline">Modifica</button>
 </div></td>
 </tr>
