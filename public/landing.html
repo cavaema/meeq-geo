@@ -96,10 +96,22 @@
     </div>
     <script>
         (async function() {
+            const path = window.location.pathname;
+            let venueId = null;
+            const m = path.match(/^\/(?:venue|l)\/(.+)$/);
+            if (m) venueId = m[1];
+            if (!venueId) {
+                document.getElementById('venueName').textContent = 'Locale non specificato';
+                document.getElementById('meeqBtn').href = '/';
+                return;
+            }
             try {
-                const r = await fetch('/api/venue');
+                const r = await fetch('/api/venue/' + encodeURIComponent(venueId));
                 const v = await r.json();
+                if (v.error) throw new Error(v.error);
                 document.getElementById('venueName').textContent = v.name || 'Benvenuto';
+                const meeqBtn = document.getElementById('meeqBtn');
+                meeqBtn.href = '/app?venue=' + v.id;
                 if (v.logo_url) {
                     const img = document.getElementById('venueLogo');
                     img.src = v.logo_url;
@@ -112,7 +124,8 @@
                     a.style.display = 'flex';
                 }
             } catch (e) {
-                console.warn('Venue config:', e);
+                document.getElementById('venueName').textContent = 'Locale non trovato';
+                document.getElementById('meeqBtn').href = '/';
             }
         })();
     </script>

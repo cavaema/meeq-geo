@@ -85,39 +85,55 @@ app.use((req, res, next) => {
 });
 
 // ============================================================================
-// VENUE / LANDING (stile meeq-events: logo + Accedi al menù | Gioca con MEEQ)
+// VENUE / LANDING - Multi-locale (gestione venues nel DB)
 // ============================================================================
-const VENUE_NAME = process.env.VENUE_NAME || 'Il nostro locale';
-const VENUE_LOGO_URL = process.env.VENUE_LOGO_URL || ''; // URL immagine logo
-const VENUE_MENU_URL = process.env.VENUE_MENU_URL || ''; // URL PDF menù
-// Geolocalizzazione per disconnessione automatica
-const VENUE_LATITUDE = parseFloat(process.env.VENUE_LATITUDE) || null;
-const VENUE_LONGITUDE = parseFloat(process.env.VENUE_LONGITUDE) || null;
-const VENUE_RADIUS_METERS = parseInt(process.env.VENUE_RADIUS_METERS, 10) || 80;
-const GEO_ENABLED = VENUE_LATITUDE != null && VENUE_LONGITUDE != null;
-
-app.get('/api/venue', (req, res) => {
-  res.json({
-    name: VENUE_NAME,
-    logo_url: VENUE_LOGO_URL,
-    menu_url: VENUE_MENU_URL,
-    geo: GEO_ENABLED ? {
-      latitude: VENUE_LATITUDE,
-      longitude: VENUE_LONGITUDE,
-      radius_meters: VENUE_RADIUS_METERS
-    } : null
+// API venue per ID
+app.get('/api/venue/:venueId', (req, res) => {
+  const venueId = req.params.venueId;
+  const bySlug = isNaN(parseInt(venueId, 10));
+  const sql = bySlug
+    ? 'SELECT * FROM venues WHERE slug = ? AND active = 1'
+    : 'SELECT * FROM venues WHERE id = ? AND active = 1';
+  db.get(sql, [venueId], (err, v) => {
+    if (err) return res.status(500).json({ error: 'Errore database' });
+    if (!v) return res.status(404).json({ error: 'Locale non trovato' });
+    const geo = (v.latitude != null && v.longitude != null) ? {
+      latitude: parseFloat(v.latitude),
+      longitude: parseFloat(v.longitude),
+      radius_meters: parseInt(v.radius_meters, 10) || 80
+    } : null;
+    res.json({
+      id: v.id,
+      name: v.name,
+      logo_url: v.logo_url || '',
+      menu_url: v.menu_url || '',
+      geo
+    });
   });
 });
 
-// Landing: /venue e / (entry point da QR o accesso diretto)
-app.get('/venue', (req, res) => {
+// API lista venues (pubblica, per pagina selezione)
+app.get('/api/venues', (req, res) => {
+  db.all('SELECT id, name, slug FROM venues WHERE active = 1 ORDER BY name', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'Errore database' });
+    res.json(rows || []);
+  });
+});
+
+// Landing per venue specifico: /venue/:id oppure /l/:slug
+app.get('/venue/:venueId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'landing.html'));
 });
-app.get('/', (req, res) => {
+app.get('/l/:slug', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'landing.html'));
 });
 
-// App MEEQ (dopo click "Gioca con MEEQ")
+// Root: lista locali (per chi arriva senza QR)
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'venues-list.html'));
+});
+
+// App MEEQ (richiede ?venue=ID nell'URL)
 app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -167,13 +183,54 @@ const db = new sqlite3.Database('./chat.db', (err) => {
 
 function initDatabase() {
   db.serialize(() => {
+    // Tabella venues (multi-locale)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS venues (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        slug TEXT UNIQUE,
+        logo_url TEXT,
+        menu_url TEXT,
+        latitude REAL,
+        longitude REAL,
+        radius_meters INTEGER DEFAULT 80,
+        central_api_key TEXT,
+        active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Crea default venue da env se la tabella è vuota
+    db.get('SELECT COUNT(*) as c FROM venues', [], (err, row) => {
+      if (!err && row && row.c === 0) {
+        const name = process.env.VENUE_NAME || 'Il nostro locale';
+        const slug = (name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'default').slice(0, 50);
+        db.run(
+          `INSERT INTO venues (name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            name,
+            slug,
+            process.env.VENUE_LOGO_URL || '',
+            process.env.VENUE_MENU_URL || '',
+            parseFloat(process.env.VENUE_LATITUDE) || null,
+            parseFloat(process.env.VENUE_LONGITUDE) || null,
+            parseInt(process.env.VENUE_RADIUS_METERS, 10) || 80,
+            process.env.VENUE_API_KEY || ''
+          ],
+          (e) => { if (!e) console.log('✅ Creato venue default da .env'); }
+        );
+      }
+    });
+
     // Tabella users con gender e distinctive_sign
     // 🆕 MODIFICATO: ora contiene anche central_user_id per sincronizzazione
     db.run(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        central_user_id INTEGER,  -- 🆕 ID utente nel server centrale
-        email TEXT UNIQUE NOT NULL,
+        venue_id INTEGER DEFAULT 1,
+        central_user_id INTEGER,
+        email TEXT NOT NULL,
         nome TEXT NOT NULL,
         cognome TEXT NOT NULL,
         gender TEXT DEFAULT 'other',
@@ -191,14 +248,15 @@ function initDatabase() {
     db.run(`ALTER TABLE users ADD COLUMN central_user_id INTEGER`, (err) => {
       // Ignora errore se colonna già esiste
     });
-    db.run(`ALTER TABLE users ADD COLUMN synced_at DATETIME`, (err) => {
-      // Ignora errore se colonna già esiste
-    });
+    db.run(`ALTER TABLE users ADD COLUMN synced_at DATETIME`, () => {});
+    db.run(`ALTER TABLE users ADD COLUMN venue_id INTEGER DEFAULT 1`, () => {});
+    // UNIQUE su (venue_id, email) invece che solo email - stesso utente può essere in venue diversi
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_venue_email ON users(venue_id, email)`, () => {});
 
-    // Tabella pending_registrations con gender e distinctive_sign
     db.run(`
       CREATE TABLE IF NOT EXISTS pending_registrations (
         email TEXT PRIMARY KEY,
+        venue_id INTEGER DEFAULT 1,
         nome TEXT NOT NULL,
         cognome TEXT NOT NULL,
         gender TEXT DEFAULT 'other',
@@ -208,15 +266,17 @@ function initDatabase() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    db.run(`ALTER TABLE pending_registrations ADD COLUMN venue_id INTEGER DEFAULT 1`, () => {});
 
-    // Tabella rooms (tavoli)
     db.run(`
       CREATE TABLE IF NOT EXISTS rooms (
         id TEXT PRIMARY KEY,
+        venue_id INTEGER DEFAULT 1,
         name TEXT NOT NULL,
         description TEXT
       )
     `);
+    db.run(`ALTER TABLE rooms ADD COLUMN venue_id INTEGER DEFAULT 1`, () => {});
 
     // Tabella messages
     db.run(`
@@ -600,9 +660,20 @@ function generatePIN() {
 const https = require('https');
 const http = require('http');
 
-// Funzione helper per chiamare il server centrale
-async function callCentralServer(endpoint, method = 'GET', body = null) {
-  if (!USE_CENTRAL_SERVER || !VENUE_API_KEY) {
+// Recupera API key del venue (per multi-locale)
+function getVenueApiKeyAsync(venueId) {
+  return new Promise((resolve) => {
+    if (!venueId) return resolve(VENUE_API_KEY || '');
+    db.get('SELECT central_api_key FROM venues WHERE id = ? AND active = 1', [venueId], (err, row) => {
+      resolve((!err && row && row.central_api_key) ? row.central_api_key : (VENUE_API_KEY || ''));
+    });
+  });
+}
+
+// Funzione helper per chiamare il server centrale (apiKey opzionale: usa quella del venue)
+async function callCentralServer(endpoint, method = 'GET', body = null, apiKey = null) {
+  const key = apiKey || VENUE_API_KEY;
+  if (!USE_CENTRAL_SERVER || !key) {
     return { error: 'Server centrale non configurato', fallback: true };
   }
 
@@ -615,7 +686,7 @@ async function callCentralServer(endpoint, method = 'GET', body = null) {
       method: method,
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': VENUE_API_KEY
+        'X-API-Key': key
       },
       timeout: 5000 // 5 secondi timeout
     };
@@ -697,11 +768,10 @@ async function sendVenueHeartbeatToCentral() {
   }
 }
 
-// Salva/aggiorna utente in cache locale
-function saveUserToLocalCache(centralUser, distinctiveSign = null) {
+// Salva/aggiorna utente in cache locale (per venue)
+function saveUserToLocalCache(centralUser, distinctiveSign = null, venueId = 1) {
   return new Promise((resolve, reject) => {
-    // Cerca se esiste già per central_user_id
-    db.get('SELECT * FROM users WHERE central_user_id = ?', [centralUser.id], (err, existing) => {
+    db.get('SELECT * FROM users WHERE venue_id = ? AND central_user_id = ?', [venueId, centralUser.id], (err, existing) => {
       if (err) {
         return reject(err);
       }
@@ -713,10 +783,10 @@ function saveUserToLocalCache(centralUser, distinctiveSign = null) {
             email = ?, nome = ?, cognome = ?, gender = ?, newsletter = ?, 
             synced_at = CURRENT_TIMESTAMP
             ${distinctiveSign !== null ? ', distinctive_sign = ?' : ''}
-           WHERE central_user_id = ?`,
+           WHERE venue_id = ? AND central_user_id = ?`,
           distinctiveSign !== null
-            ? [centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, distinctiveSign, centralUser.id]
-            : [centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, centralUser.id],
+            ? [centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, distinctiveSign, venueId, centralUser.id]
+            : [centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, venueId, centralUser.id],
           function (updateErr) {
             if (updateErr) {
               return reject(updateErr);
@@ -725,8 +795,7 @@ function saveUserToLocalCache(centralUser, distinctiveSign = null) {
           }
         );
       } else {
-        // Cerca per email (migration da sistema vecchio)
-        db.get('SELECT * FROM users WHERE email = ?', [centralUser.email], (err, emailUser) => {
+        db.get('SELECT * FROM users WHERE venue_id = ? AND email = ?', [venueId, centralUser.email], (err, emailUser) => {
           if (err) {
             return reject(err);
           }
@@ -751,11 +820,10 @@ function saveUserToLocalCache(centralUser, distinctiveSign = null) {
               }
             );
           } else {
-            // Crea nuovo utente in cache locale
             db.run(
-              `INSERT INTO users (central_user_id, email, nome, cognome, gender, newsletter, distinctive_sign, synced_at) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-              [centralUser.id, centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, distinctiveSign],
+              `INSERT INTO users (venue_id, central_user_id, email, nome, cognome, gender, newsletter, distinctive_sign, synced_at) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+              [venueId, centralUser.id, centralUser.email, centralUser.nome, centralUser.cognome, centralUser.gender, centralUser.newsletter, distinctiveSign],
               function (insertErr) {
                 if (insertErr) {
                   return reject(insertErr);
@@ -869,18 +937,18 @@ async function sendReportEmail(reportData) {
 // ============================================================================
 
 // Check email
-// 🆕 MODIFICATO: verifica prima sul server centrale, fallback locale
 app.post('/api/check-email', async (req, res) => {
-  const { email } = req.body;
+  const { email, venue_id } = req.body;
+  const vid = venue_id || 1;
 
   if (!email) {
     return res.status(400).json({ error: 'Email richiesta' });
   }
 
-  // Prova prima con server centrale
-  if (USE_CENTRAL_SERVER && VENUE_API_KEY) {
+  const apiKey = await getVenueApiKeyAsync(vid);
+  if (USE_CENTRAL_SERVER && apiKey) {
     try {
-      const result = await callCentralServer('/api/central/check-email', 'POST', { email });
+      const result = await callCentralServer('/api/central/check-email', 'POST', { email }, apiKey);
 
       if (!result.fallback && !result.error) {
         // Server centrale risponde correttamente
@@ -894,8 +962,8 @@ app.post('/api/check-email', async (req, res) => {
     }
   }
 
-  // Fallback: cerca utente esistente in cache locale
-  db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+  // Fallback: cerca utente esistente in cache locale (per questo venue)
+  db.get('SELECT * FROM users WHERE venue_id = ? AND email = ?', [vid, email], (err, user) => {
     if (err) {
       return res.status(500).json({ error: 'Errore database' });
     }
@@ -904,13 +972,10 @@ app.post('/api/check-email', async (req, res) => {
       // Utente esiste in cache locale - genera nuovo PIN
       const pin = generatePIN();
 
-      // Rimuovi vecchie pending registrations per questa email
       db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
-
-      // Inserisci nuova pending registration
       db.run(
-        'INSERT INTO pending_registrations (email, nome, cognome, gender, distinctive_sign, pin, newsletter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [user.email, user.nome, user.cognome, user.gender, user.distinctive_sign, pin, user.newsletter, new Date().toISOString()],
+        'INSERT OR REPLACE INTO pending_registrations (email, venue_id, nome, cognome, gender, distinctive_sign, pin, newsletter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [user.email, vid, user.nome, user.cognome, user.gender, user.distinctive_sign, pin, user.newsletter, new Date().toISOString()],
         (err) => {
           if (err) {
             console.error('Errore creazione pending registration:', err);
@@ -937,20 +1002,20 @@ app.post('/api/check-email', async (req, res) => {
 });
 
 // Register
-// 🆕 MODIFICATO: registra sul server centrale, fallback locale
 app.post('/api/register', async (req, res) => {
-  const { email, nome, cognome, gender, distinctive_sign, newsletter } = req.body;
+  const { email, nome, cognome, gender, distinctive_sign, newsletter, venue_id } = req.body;
+  const vid = venue_id || 1;
 
   if (!email || !nome || !cognome || !gender) {
     return res.status(400).json({ error: 'Dati incompleti' });
   }
 
-  // Prova prima con server centrale
-  if (USE_CENTRAL_SERVER && VENUE_API_KEY) {
+  const apiKey = await getVenueApiKeyAsync(vid);
+  if (USE_CENTRAL_SERVER && apiKey) {
     try {
       const result = await callCentralServer('/api/central/register', 'POST', {
         email, nome, cognome, gender, newsletter
-      });
+      }, apiKey);
 
       if (!result.fallback && !result.error) {
         // Server centrale risponde correttamente
@@ -964,8 +1029,8 @@ app.post('/api/register', async (req, res) => {
     }
   }
 
-  // Fallback: verifica se email già esiste in cache locale
-  db.get('SELECT * FROM users WHERE email = ?', [email], (err, existingUser) => {
+  // Fallback: verifica se email già esiste in cache locale (per questo venue)
+  db.get('SELECT * FROM users WHERE venue_id = ? AND email = ?', [vid, email], (err, existingUser) => {
     if (err) {
       return res.status(500).json({ error: 'Errore database' });
     }
@@ -980,10 +1045,9 @@ app.post('/api/register', async (req, res) => {
     // Rimuovi vecchie pending registrations
     db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
 
-    // Inserisci pending registration
     db.run(
-      'INSERT INTO pending_registrations (email, nome, cognome, gender, distinctive_sign, pin, newsletter) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [email, nome, cognome, gender, distinctive_sign || null, pin, newsletter ? 1 : 0],
+      'INSERT OR REPLACE INTO pending_registrations (email, venue_id, nome, cognome, gender, distinctive_sign, pin, newsletter) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [email, vid, nome, cognome, gender, distinctive_sign || null, pin, newsletter ? 1 : 0],
       (err) => {
         if (err) {
           console.error('Errore inserimento pending registration:', err);
@@ -1006,9 +1070,9 @@ app.post('/api/register', async (req, res) => {
 });
 
 // Verify PIN
-// 🆕 MODIFICATO: verifica PIN sul server centrale, salva in cache locale, genera token locale
 app.post('/api/verify-pin', async (req, res) => {
-  const { email, pin, distinctive_sign, distinctiveSign } = req.body;
+  const { email, pin, distinctive_sign, distinctiveSign, venue_id } = req.body;
+  const vid = venue_id || 1;
   const normalizedDistinctiveSign =
     (typeof distinctiveSign === 'string' ? distinctiveSign.trim() : distinctiveSign) ||
     (typeof distinctive_sign === 'string' ? distinctive_sign.trim() : distinctive_sign) ||
@@ -1018,10 +1082,10 @@ app.post('/api/verify-pin', async (req, res) => {
     return res.status(400).json({ error: 'Email e PIN richiesti' });
   }
 
-  // Prova prima con server centrale
-  if (USE_CENTRAL_SERVER && VENUE_API_KEY) {
+  const apiKey = await getVenueApiKeyAsync(vid);
+  if (USE_CENTRAL_SERVER && apiKey) {
     try {
-      const result = await callCentralServer('/api/central/verify-pin', 'POST', { email, pin });
+      const result = await callCentralServer('/api/central/verify-pin', 'POST', { email, pin }, apiKey);
 
       if (!result.fallback && !result.error && result.success) {
         // Server centrale ha verificato correttamente il PIN
@@ -1029,9 +1093,8 @@ app.post('/api/verify-pin', async (req, res) => {
         const centralToken = result.token;
         const refreshToken = result.refreshToken;
 
-        // Salva/aggiorna utente in cache locale
         try {
-          const localUserId = await saveUserToLocalCache(centralUser, normalizedDistinctiveSign);
+          const localUserId = await saveUserToLocalCache(centralUser, normalizedDistinctiveSign, vid);
 
           // Aggiorna stato login locale
           if (normalizedDistinctiveSign !== null) {
@@ -1046,9 +1109,8 @@ app.post('/api/verify-pin', async (req, res) => {
             );
           }
 
-          // Genera token JWT locale (per sessione locale)
           const localToken = jwt.sign(
-            { userId: localUserId, email: centralUser.email, centralUserId: centralUser.id },
+            { userId: localUserId, email: centralUser.email, centralUserId: centralUser.id, venueId: vid },
             JWT_SECRET,
             { expiresIn: '48h' }
           );
@@ -1063,9 +1125,10 @@ app.post('/api/verify-pin', async (req, res) => {
 
             res.json({
               success: true,
-              token: localToken, // Token locale per sessione
-              centralToken: centralToken, // Token centrale (da salvare in PWA)
-              refreshToken: refreshToken, // Refresh token (da salvare in PWA)
+              token: localToken,
+              centralToken: centralToken,
+              refreshToken: refreshToken,
+              venueId: vid,
               user: {
                 id: localUserId,
                 centralUserId: centralUser.id,
@@ -1092,7 +1155,6 @@ app.post('/api/verify-pin', async (req, res) => {
     }
   }
 
-  // Fallback: logica locale (se server centrale non disponibile)
   db.get(
     'SELECT * FROM pending_registrations WHERE email = ? AND pin = ?',
     [email, pin],
@@ -1118,8 +1180,8 @@ app.post('/api/verify-pin', async (req, res) => {
       // Aggiorna distinctive_sign se fornito
       const finalDistinctiveSign = normalizedDistinctiveSign || pending.distinctive_sign;
 
-      // Cerca utente esistente in cache locale
-      db.get('SELECT * FROM users WHERE email = ?', [email], (err, existingUser) => {
+      const pvid = pending.venue_id || vid;
+      db.get('SELECT * FROM users WHERE venue_id = ? AND email = ?', [pvid, email], (err, existingUser) => {
         if (err) {
           return res.status(500).json({ error: 'Errore database' });
         }
@@ -1138,9 +1200,8 @@ app.post('/api/verify-pin', async (req, res) => {
             );
           }
 
-          // Genera token locale
           const token = jwt.sign(
-            { userId: existingUser.id, email: existingUser.email },
+            { userId: existingUser.id, email: existingUser.email, venueId: pvid },
             JWT_SECRET,
             { expiresIn: '48h' }
           );
@@ -1153,6 +1214,7 @@ app.post('/api/verify-pin', async (req, res) => {
           res.json({
             success: true,
             token,
+            venueId: pvid,
             user: {
               id: existingUser.id,
               email: existingUser.email,
@@ -1164,10 +1226,9 @@ app.post('/api/verify-pin', async (req, res) => {
             }
           });
         } else {
-          // Registra nuovo utente (fallback locale - solo se server centrale non disponibile)
           db.run(
-            'INSERT INTO users (email, nome, cognome, gender, distinctive_sign, newsletter, logged_in, last_activity) VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)',
-            [pending.email, pending.nome, pending.cognome, pending.gender, finalDistinctiveSign, pending.newsletter],
+            'INSERT INTO users (venue_id, email, nome, cognome, gender, distinctive_sign, newsletter, logged_in, last_activity) VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)',
+            [pvid, pending.email, pending.nome, pending.cognome, pending.gender, finalDistinctiveSign, pending.newsletter || 0],
             function (err) {
               if (err) {
                 console.error('Errore creazione utente:', err);
@@ -1176,21 +1237,17 @@ app.post('/api/verify-pin', async (req, res) => {
 
               const newUserId = this.lastID;
 
-              // Genera token locale
               const token = jwt.sign(
-                { userId: newUserId, email: pending.email },
+                { userId: newUserId, email: pending.email, venueId: pvid },
                 JWT_SECRET,
                 { expiresIn: '48h' }
               );
-
-              // Cancella pending registration
               db.run('DELETE FROM pending_registrations WHERE email = ?', [email]);
-
               console.log(`✅ Nuovo utente registrato (fallback locale): ${pending.nome} ${pending.cognome}`);
-
               res.json({
                 success: true,
                 token,
+                venueId: pvid,
                 user: {
                   id: newUserId,
                   email: pending.email,
@@ -1215,7 +1272,8 @@ app.post('/api/verify-pin', async (req, res) => {
 
 // 🆕 Login automatico con token centrale
 app.post('/api/auto-login', async (req, res) => {
-  const { centralToken } = req.body;
+  const { centralToken, venue_id } = req.body;
+  const vid = venue_id ? parseInt(venue_id, 10) : 1;
 
   console.log('🔍 [AUTO-LOGIN] Richiesta ricevuta:', {
     hasToken: !!centralToken,
@@ -1246,9 +1304,9 @@ app.post('/api/auto-login', async (req, res) => {
       if (!centralResult.fallback && !centralResult.error && centralResult.valid) {
         const centralUser = centralResult.user;
 
-        // Salva/aggiorna utente in cache locale
+        // Salva/aggiorna utente in cache locale (per il venue richiesto)
         try {
-          const localUserId = await saveUserToLocalCache(centralUser, null);
+          const localUserId = await saveUserToLocalCache(centralUser, null, vid);
 
           // Aggiorna stato login locale
           db.run(
@@ -1283,6 +1341,7 @@ app.post('/api/auto-login', async (req, res) => {
               user: {
                 id: localUserId,
                 centralUserId: centralUser.id,
+                venueId: localUser?.venue_id ?? 1,
                 email: centralUser.email,
                 nome: centralUser.nome,
                 cognome: centralUser.cognome,
@@ -2780,6 +2839,45 @@ app.post('/api/conversations/:conversationId/report', authenticateToken, (req, r
 // ============================================================================
 // API ENDPOINTS - ADMIN
 // ============================================================================
+
+// Admin: lista venues
+app.get('/api/admin/venues', authenticateAdminJWT, (req, res) => {
+  db.all('SELECT * FROM venues WHERE active = 1 ORDER BY name', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'Errore database' });
+    res.json(rows || []);
+  });
+});
+
+// Admin: crea venue
+app.post('/api/admin/venues', authenticateAdminJWT, (req, res) => {
+  const { name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key } = req.body;
+  if (!name) return res.status(400).json({ error: 'Nome obbligatorio' });
+  const s = (slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')).slice(0, 50) || 'venue';
+  db.run(
+    `INSERT INTO venues (name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [name, s, logo_url || '', menu_url || '', latitude ? parseFloat(latitude) : null, longitude ? parseFloat(longitude) : null, radius_meters || 80, central_api_key || ''],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, id: this.lastID, slug: s });
+    }
+  );
+});
+
+// Admin: aggiorna venue
+app.put('/api/admin/venues/:id', authenticateAdminJWT, (req, res) => {
+  const id = req.params.id;
+  const { name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key, active } = req.body;
+  db.run(
+    `UPDATE venues SET name = ?, slug = ?, logo_url = ?, menu_url = ?, latitude = ?, longitude = ?, radius_meters = ?, central_api_key = ?, active = ? 
+     WHERE id = ?`,
+    [name || '', slug || '', logo_url || '', menu_url || '', latitude ? parseFloat(latitude) : null, longitude ? parseFloat(longitude) : null, radius_meters || 80, central_api_key || '', active !== 0 ? 1 : 0, id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
+});
 
 // Login admin
 app.post('/api/admin/login', (req, res) => {

@@ -1316,7 +1316,8 @@
         
         // Stato globale
         let currentUser = null;
-        let selectedTableId = null; // 🆕 Tavolo selezionato per vedere utenti
+        let currentVenueId = null; // venue dalla URL (?venue=) o sessione
+        let selectedTableId = null;
         let badgeInterval = null; // 🆕 Interval per polling badge
         let onlineInterval = null; // 🆕 Interval per polling utenti online
         let tablesCheckInterval = null; // 🆕 PROBLEMA 2: Interval per polling tavoli
@@ -1379,18 +1380,22 @@
             if (userData.centralUserId) {
                 localStorage.setItem('meeq_central_user_id', userData.centralUserId.toString());
             }
-            // Salva venue ID corrente (per rilevare cambio locale)
-            const currentVenueId = getCurrentVenueId(); // Funzione da implementare
-            if (currentVenueId) {
-                localStorage.setItem('meeq_venue_id', currentVenueId);
+            if (userData.venueId) {
+                currentVenueId = userData.venueId;
+                localStorage.setItem('meeq_venue_id', String(userData.venueId));
+            } else {
+                const vid = getCurrentVenueId();
+                if (vid) localStorage.setItem('meeq_venue_id', String(vid));
             }
         }
         
-        // 🆕 Ottieni venue ID corrente (da URL o configurazione)
         function getCurrentVenueId() {
-            // Per ora, usa l'hostname come identificatore locale
-            // In futuro potrebbe essere un parametro URL o configurazione
-            return window.location.hostname;
+            const p = new URLSearchParams(window.location.search).get('venue');
+            if (p) return p;
+            if (currentVenueId) return currentVenueId;
+            const s = getSession();
+            if (s && s.venueId) return s.venueId;
+            return localStorage.getItem('meeq_venue_id') || '1';
         }
         
         // 🆕 Verifica se è cambiato il locale
@@ -1799,7 +1804,8 @@
             const email = document.getElementById('checkEmail').value.trim();
             
             try {
-                const data = await apiCall('/check-email', 'POST', { email });
+                const vid = currentVenueId || new URLSearchParams(window.location.search).get('venue') || 1;
+                const data = await apiCall('/check-email', 'POST', { email, venue_id: vid });
                 
                 // Salva email temporaneamente
                 sessionStorage.setItem('currentEmail', email);
@@ -1847,6 +1853,7 @@
             }
             
             try {
+                const vid = currentVenueId || new URLSearchParams(window.location.search).get('venue') || 1;
                 const data = await apiCall('/register', 'POST', {
                     nome,
                     cognome,
@@ -1854,7 +1861,8 @@
                     telefono,
                     gender,
                     privacyAccepted,
-                    newsletterAccepted
+                    newsletterAccepted,
+                    venue_id: vid
                 });
                 
                 document.getElementById('emailDisplay').textContent = email;
@@ -1945,7 +1953,9 @@
             
             try {
                 // Invia sempre il segno distintivo (può essere modificato ogni giorno)
+                const vid = currentVenueId || new URLSearchParams(window.location.search).get('venue') || 1;
                 const data = await apiCall('/verify-pin', 'POST', {
+                    venue_id: vid,
                     email: email,
                     pin,
                     distinctiveSign: distinctiveSign || null
@@ -1964,12 +1974,13 @@
                 
                 // 🆕 Salva sessione con token centrali (se disponibili)
                 saveSession({
-                    token: data.token, // Token locale
-                    centralToken: data.centralToken || null, // Token server centrale
-                    refreshToken: data.refreshToken || null, // Refresh token
-                    userId: userId,
-                    centralUserId: data.user.centralUserId || null, // ID utente server centrale
-                    email: email,
+                    token: data.token,
+                    centralToken: data.centralToken || null,
+                    refreshToken: data.refreshToken || null,
+                    userId,
+                    centralUserId: data.user.centralUserId || null,
+                    venueId: data.venueId || vid,
+                    email,
                     nome: userData.nome || data.user.nome,
                     cognome: userData.cognome || data.user.cognome,
                     gender: userData.gender || data.user.gender,
@@ -2588,7 +2599,8 @@
             if (geoWatchId != null || geoCheckInterval != null) return;
             if (!currentUser || !currentUser.token) return;
 
-            fetch(`${API_URL}/venue`).then(r => r.json()).then(venue => {
+            const vid = currentUser.venueId || currentVenueId || new URLSearchParams(window.location.search).get('venue') || 1;
+            fetch(`${window.location.origin}/api/venue/${vid}`).then(r => r.json()).then(venue => {
                 if (!venue.geo || !venue.geo.latitude || !venue.geo.longitude) {
                     console.log('📍 Geolocalizzazione non configurata per questo locale');
                     return;
@@ -3665,9 +3677,15 @@
             localStorage.removeItem('meeq_install_prompt_pending');
         });
 
-        // Inizializzazione
         async function init() {
-            // 🆕 Registra Service Worker (anche se non loggato)
+            const urlVenue = new URLSearchParams(window.location.search).get('venue');
+            if (urlVenue) currentVenueId = urlVenue;
+            else {
+                const s = localStorage.getItem('meeq_session');
+                const parsed = s ? JSON.parse(s) : null;
+                if (parsed && parsed.venueId) currentVenueId = String(parsed.venueId);
+                else currentVenueId = localStorage.getItem('meeq_venue_id') || '1';
+            }
             registerServiceWorker();
             
             // 🆕 Verifica se c'è un token centrale salvato e se è cambiato il locale
@@ -3692,7 +3710,7 @@
                 console.log('🔄 Tentativo login automatico con token centrale...');
                 try {
                     // Chiama endpoint auto-login del server locale
-                    const autoLoginData = await apiCall('/auto-login', 'POST', { centralToken });
+                    const autoLoginData = await apiCall('/auto-login', 'POST', { centralToken, venue_id: currentVenueId || 1 });
                     
                     if (autoLoginData.success && autoLoginData.user) {
                         console.log('✅ Login automatico riuscito!');
@@ -3704,6 +3722,7 @@
                             refreshToken: refreshToken,
                             userId: autoLoginData.user.id,
                             centralUserId: autoLoginData.user.centralUserId,
+                            venueId: autoLoginData.user.venueId || currentVenueId,
                             email: autoLoginData.user.email,
                             nome: autoLoginData.user.nome,
                             cognome: autoLoginData.user.cognome,

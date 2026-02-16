@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#E91E8C">
+    <title>Meeq - Seleziona locale</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 24px;
+        }
+        h1 { font-size: 24px; margin-bottom: 8px; }
+        p { color: rgba(255,255,255,0.6); margin-bottom: 32px; font-size: 14px; }
+        .venue-list { width: 100%; max-width: 400px; }
+        .venue-btn {
+            display: block;
+            width: 100%;
+            padding: 20px;
+            margin-bottom: 12px;
+            background: rgba(255,255,255,0.08);
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 14px;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            text-decoration: none;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .venue-btn:hover {
+            background: rgba(255,255,255,0.15);
+            border-color: rgba(233,30,140,0.5);
+        }
+        .empty { color: rgba(255,255,255,0.5); text-align: center; padding: 40px; }
+    </style>
+</head>
+<body>
+    <h1>Meeq</h1>
+    <p>Seleziona il locale oppure scansiona il QR</p>
+    <div class="venue-list" id="venueList">
+        <div class="empty">Caricamento...</div>
+    </div>
+    <script>
+        (async () => {
+            try {
+                const r = await fetch('/api/venues');
+                const venues = await r.json();
+                const el = document.getElementById('venueList');
+                if (!venues || venues.length === 0) {
+                    el.innerHTML = '<div class="empty">Nessun locale configurato.</div>';
+                    return;
+                }
+                el.innerHTML = venues.map(v => 
+                    `<a class="venue-btn" href="/venue/${v.id}">${v.name}</a>`
+                ).join('');
+            } catch (e) {
+                document.getElementById('venueList').innerHTML = '<div class="empty">Errore caricamento locali.</div>';
+            }
+        })();
+    </script>
+</body>
+</html>
