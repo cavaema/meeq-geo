@@ -677,6 +677,15 @@ function generatePIN() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // ============================================================================
 // 🆕 FUNZIONI HELPER PER SERVER CENTRALE
 // ============================================================================
@@ -1095,9 +1104,27 @@ app.post('/api/register', async (req, res) => {
 
 // Verify PIN
 app.post('/api/verify-pin', async (req, res) => {
-  const { email, pin, distinctive_sign, distinctiveSign, venue_id } = req.body;
+  const { email, pin, distinctive_sign, distinctiveSign, venue_id, tavolo, latitude, longitude } = req.body;
   const vid = venue_id || 1;
-  const normalizedDistinctiveSign =
+
+  // Geo check: se il locale ha coordinate e il client invia lat/lng, verifica che l'utente sia nel raggio
+  if (latitude != null && longitude != null) {
+    db.get('SELECT latitude, longitude, radius_meters FROM venues WHERE id = ? AND active = 1', [vid], (err, v) => {
+      if (!err && v && v.latitude != null && v.longitude != null) {
+        const dist = haversineMeters(parseFloat(v.latitude), parseFloat(v.longitude), parseFloat(latitude), parseFloat(longitude));
+        const radius = parseInt(v.radius_meters, 10) || 80;
+        if (dist > radius) {
+          return res.status(403).json({ error: 'Devi essere dentro il locale per accedere. Posizione fuori dal raggio.' });
+        }
+      }
+      proceedVerifyPin();
+    });
+  } else {
+    proceedVerifyPin();
+  }
+
+  async function proceedVerifyPin() {
+    const normalizedDistinctiveSign =
     (typeof distinctiveSign === 'string' ? distinctiveSign.trim() : distinctiveSign) ||
     (typeof distinctive_sign === 'string' ? distinctive_sign.trim() : distinctive_sign) ||
     null;
@@ -1119,6 +1146,10 @@ app.post('/api/verify-pin', async (req, res) => {
 
         try {
           const localUserId = await saveUserToLocalCache(centralUser, normalizedDistinctiveSign, vid);
+          const normalizedTavolo = (tavolo && String(tavolo).trim()) ? (String(tavolo).toLowerCase().startsWith('tavolo') ? String(tavolo).trim() : 'tavolo-' + String(tavolo).trim()) : null;
+          if (normalizedTavolo) {
+            db.run('UPDATE users SET tavolo = ? WHERE id = ?', [normalizedTavolo, localUserId]);
+          }
 
           // Aggiorna stato login locale
           if (normalizedDistinctiveSign !== null) {
@@ -1161,7 +1192,7 @@ app.post('/api/verify-pin', async (req, res) => {
                 cognome: centralUser.cognome,
                 gender: centralUser.gender,
                 distinctive_sign: normalizedDistinctiveSign || localUser?.distinctive_sign || null,
-                tavolo: localUser?.tavolo || null
+                tavolo: normalizedTavolo || localUser?.tavolo || null
               }
             });
           });
@@ -1212,17 +1243,13 @@ app.post('/api/verify-pin', async (req, res) => {
 
         if (existingUser) {
           // Login utente esistente (fallback locale)
-          if (finalDistinctiveSign) {
-            db.run(
-              'UPDATE users SET distinctive_sign = ?, logged_in = 1, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
-              [finalDistinctiveSign, existingUser.id]
-            );
-          } else {
-            db.run(
-              'UPDATE users SET logged_in = 1, last_activity = CURRENT_TIMESTAMP WHERE id = ?',
-              [existingUser.id]
-            );
-          }
+          const normTavolo = (tavolo && String(tavolo).trim()) ? (String(tavolo).toLowerCase().startsWith('tavolo') ? String(tavolo).trim() : 'tavolo-' + String(tavolo).trim()) : null;
+          const updateFields = ['logged_in = 1', 'last_activity = CURRENT_TIMESTAMP'];
+          const updateVals = [];
+          if (finalDistinctiveSign) { updateFields.push('distinctive_sign = ?'); updateVals.push(finalDistinctiveSign); }
+          if (normTavolo) { updateFields.push('tavolo = ?'); updateVals.push(normTavolo); }
+          updateVals.push(existingUser.id);
+          db.run(`UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`, updateVals);
 
           const token = jwt.sign(
             { userId: existingUser.id, email: existingUser.email, venueId: pvid },
@@ -1246,13 +1273,14 @@ app.post('/api/verify-pin', async (req, res) => {
               cognome: existingUser.cognome,
               gender: existingUser.gender,
               distinctive_sign: finalDistinctiveSign || existingUser.distinctive_sign,
-              tavolo: existingUser.tavolo
+              tavolo: normTavolo || existingUser.tavolo
             }
           });
         } else {
+          const normTavoloNew = (tavolo && String(tavolo).trim()) ? (String(tavolo).toLowerCase().startsWith('tavolo') ? String(tavolo).trim() : 'tavolo-' + String(tavolo).trim()) : null;
           db.run(
-            'INSERT INTO users (venue_id, email, nome, cognome, gender, distinctive_sign, newsletter, logged_in, last_activity) VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)',
-            [pvid, pending.email, pending.nome, pending.cognome, pending.gender, finalDistinctiveSign, pending.newsletter || 0],
+            'INSERT INTO users (venue_id, email, nome, cognome, gender, distinctive_sign, newsletter, tavolo, logged_in, last_activity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)',
+            [pvid, pending.email, pending.nome, pending.cognome, pending.gender, finalDistinctiveSign, pending.newsletter || 0, normTavoloNew],
             function (err) {
               if (err) {
                 console.error('Errore creazione utente:', err);
@@ -1279,7 +1307,7 @@ app.post('/api/verify-pin', async (req, res) => {
                   cognome: pending.cognome,
                   gender: pending.gender,
                   distinctive_sign: finalDistinctiveSign,
-                  tavolo: null
+                  tavolo: normTavoloNew
                 }
               });
             }
@@ -1288,6 +1316,7 @@ app.post('/api/verify-pin', async (req, res) => {
       });
     }
   );
+  }
 });
 
 // ============================================================================

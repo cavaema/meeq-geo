@@ -43,18 +43,34 @@
             padding: 20px;
         }
 
-        /* Header */
-        /* Header Actions */
-        .header-content {
-            text-align: center;
-        }
-        
-        .header-actions {
-            position: absolute;
-            top: 30px;
-            right: 20px;
+        .header {
+            padding: 12px 20px 15px;
             display: flex;
-            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            max-width: 500px;
+            margin: 0 auto;
+            position: sticky;
+            top: 0;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            z-index: 100;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .header-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-logo-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
             align-items: center;
         }
         
@@ -84,31 +100,21 @@
             visibility: hidden !important;
         }
 
-        .header {
-            text-align: center;
-            padding: 30px 0;
-            position: sticky;
-            top: 0;
-            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
-            z-index: 100;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
         .logo {
             font-family: 'Montserrat', sans-serif;
-            font-size: 48px;
+            font-size: 22px;
             font-weight: 800;
+            line-height: 1.1;
             background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 10px;
         }
 
         .tagline {
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.6);
-            letter-spacing: 2px;
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.5);
+            letter-spacing: 1px;
             text-transform: uppercase;
         }
 
@@ -1052,21 +1058,17 @@
     </style>
 </head>
 <body>
-    <!-- Header (mostrato solo in home e liste) -->
     <div id="mainHeader" class="header">
-        <!-- 🆕 Indicatore tavolo a sinistra -->
-        <div id="currentTableIndicator" style="display: none; position: absolute; top: 30px; left: 20px; padding: 8px 16px; background: rgba(255,255,255,0.1); border-radius: 20px; font-size: 13px; font-weight: 600;">
-            🪑 <span id="currentTableNumber">-</span>
-        </div>
-        
         <div class="header-content">
-            <div class="logo">Meeq</div>
-            <div class="tagline">Connetti. Scopri. Gioca.</div>
+            <div class="header-logo-block">
+                <div class="logo">meeq</div>
+                <div class="tagline">Connetti. Scopri. Gioca.</div>
+            </div>
+            <div id="currentTableIndicator" style="display: none; padding: 4px 10px; background: rgba(255,255,255,0.1); border-radius: 16px; font-size: 11px; font-weight: 600;">
+                🪑 <span id="currentTableNumber">-</span>
+            </div>
         </div>
         <div class="header-actions" id="headerActions" style="display: none;">
-            <button class="icon-btn" id="scanQrBtn" onclick="openQRScanner()" title="Scansiona QR">
-                📷
-            </button>
             <button class="icon-btn" id="messagesBtn" onclick="showConversationsScreen()" title="Messaggi">
                 💬
                 <span class="badge" id="messagesBadge" style="display: none;">0</span>
@@ -1104,9 +1106,6 @@
                     </div>
                     <button type="submit" class="btn btn-primary">Continua</button>
                 </form>
-                <button type="button" class="btn btn-secondary" style="margin-top: 12px;" onclick="openQRScanner()">
-                    📷 Scansiona QR del tavolo
-                </button>
                 <div class="privacy-link">
                     <a href="/privacy.html" target="_blank">Informativa Privacy</a>
                 </div>
@@ -1163,7 +1162,7 @@
             </div>
         </div>
 
-        <!-- Schermata 3: Inserimento PIN + Segno Distintivo -->
+        <!-- Schermata 3: Inserimento PIN + Tavolo + Segno Distintivo -->
         <div id="pinScreen" class="hidden">
             <div class="card">
                 <h2>Verifica Email 📧</h2>
@@ -1174,6 +1173,10 @@
                     <div class="form-group">
                         <label for="pin">Codice PIN (6 cifre) *</label>
                         <input type="text" id="pin" required maxlength="6" pattern="[0-9]{6}" placeholder="123456">
+                    </div>
+                    <div class="form-group">
+                        <label for="pinTavolo">Numero tavolo *</label>
+                        <input type="text" id="pinTavolo" required placeholder="Es: 5" maxlength="20">
                     </div>
                     <div class="form-group">
                         <label for="distinctiveSign">Segno Distintivo (opzionale)</label>
@@ -1215,7 +1218,7 @@
                 <div id="usersList" class="users-list">
                     <!-- Utenti generati dinamicamente -->
                 </div>
-                <button class="btn btn-secondary" onclick="showOtherTablesScreen()">← Torna ai Tavoli</button>
+                <button class="btn btn-secondary" onclick="showConversationsScreen()">← Conversazioni</button>
             </div>
         </div>
 
@@ -1226,7 +1229,7 @@
                 <div id="conversationsList" class="conversations-list">
                     <!-- Conversazioni generate dinamicamente -->
                 </div>
-                <button class="btn btn-secondary" onclick="showOtherTablesScreen()">← Torna ai Tavoli</button>
+                <button class="btn btn-secondary" onclick="showUsersAtMyTable()">👥 Utenti al mio tavolo</button>
             </div>
         </div>
 
@@ -1701,16 +1704,22 @@
             const submitBtn = document.querySelector('#pinForm button[type=\"submit\"]');
             const changeEmailBtn = document.querySelector('#pinForm button.btn.btn-secondary');
 
+            const pinTavoloEl = document.getElementById('pinTavolo');
+            const tavoloGroup = pinTavoloEl ? pinTavoloEl.closest('.form-group') : null;
             if (mode === 'sign_only') {
                 if (pinGroup) pinGroup.style.display = 'none';
+                if (tavoloGroup) tavoloGroup.style.display = 'none';
                 if (pinInput) pinInput.required = false;
+                if (pinTavoloEl) pinTavoloEl.required = false;
                 if (title) title.textContent = 'Bentornato! 👋';
                 if (paragraph) paragraph.innerHTML = 'Aggiungi (se vuoi) un <strong>segno distintivo</strong> per farti riconoscere.';
                 if (submitBtn) submitBtn.textContent = 'Entra';
                 if (changeEmailBtn) changeEmailBtn.style.display = 'none';
             } else {
                 if (pinGroup) pinGroup.style.display = '';
+                if (tavoloGroup) tavoloGroup.style.display = '';
                 if (pinInput) pinInput.required = true;
+                if (pinTavoloEl) pinTavoloEl.required = true;
                 if (title) title.textContent = 'Verifica Email 📧';
                 if (paragraph) paragraph.innerHTML = 'Abbiamo inviato un codice PIN a <strong id=\"emailDisplay\"></strong>';
                 if (submitBtn) submitBtn.textContent = 'Verifica PIN';
@@ -1922,19 +1931,12 @@
                         return;
                     }
 
-                    const tableFromQR = getTableFromURL();
-                    if (tableFromQR) {
-                        await apiCall('/select-table', 'POST', { tavolo: tableFromQR });
-                        currentUser.tableNumber = tableFromQR;
-                        saveSession(currentUser);
-                        updateTableIndicator();
-                        document.getElementById('headerActions').style.display = 'flex';
-                        startBadgePolling();
-                        showOtherTablesScreen();
-                    } else {
-                        loadTables();
-                        showScreen('tableScreen');
-                    }
+                    document.getElementById('headerActions').style.display = 'flex';
+                    updateTableIndicator();
+                    startBadgePolling();
+                    startGeoWatch();
+                    loadConversations();
+                    showScreen('conversationsScreen');
                 } catch (error) {
                     console.error('Errore aggiornamento segno distintivo:', error);
                     alert(error.message || 'Errore aggiornamento segno distintivo');
@@ -1950,15 +1952,44 @@
             }
             
             const pin = document.getElementById('pin').value.trim();
+            const tavoloInput = document.getElementById('pinTavolo');
+            const tavolo = (tavoloInput && tavoloInput.value) ? tavoloInput.value.trim() : '';
+            if (!tavolo) {
+                alert('Inserisci il numero del tavolo');
+                return;
+            }
             
             try {
-                // Invia sempre il segno distintivo (può essere modificato ogni giorno)
                 const vid = currentVenueId || new URLSearchParams(window.location.search).get('venue') || 1;
+                let latitude = null, longitude = null;
+                const venueRes = await fetch(`${window.location.origin}/api/venue/${vid}`);
+                const venue = await venueRes.json();
+                if (venue.geo && venue.geo.latitude != null && venue.geo.longitude != null && navigator.geolocation) {
+                    try {
+                        const pos = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 });
+                        });
+                        latitude = pos.coords.latitude;
+                        longitude = pos.coords.longitude;
+                        const dist = haversineDistance(venue.geo.latitude, venue.geo.longitude, latitude, longitude);
+                        const radius = venue.geo.radius_meters || 80;
+                        if (dist > radius) {
+                            alert('Devi essere dentro il locale per accedere. Sei fuori dal raggio consentito.');
+                            return;
+                        }
+                    } catch (geoErr) {
+                        alert('Per accedere è necessario abilitare la geolocalizzazione.');
+                        return;
+                    }
+                }
                 const data = await apiCall('/verify-pin', 'POST', {
                     venue_id: vid,
-                    email: email,
+                    email,
                     pin,
-                    distinctiveSign: distinctiveSign || null
+                    tavolo,
+                    distinctiveSign: distinctiveSign || null,
+                    latitude: latitude,
+                    longitude: longitude
                 });
                 
                 // ✅ Verifica che il backend abbia ritornato userId
@@ -1985,7 +2016,7 @@
                     cognome: userData.cognome || data.user.cognome,
                     gender: userData.gender || data.user.gender,
                     distinctiveSign: distinctiveSign || null,
-                    tableNumber: null
+                    tableNumber: data.user?.tavolo || null
                 });
 
                 // 🆕 Salva credenziali (email + ultimo PIN inserito)
@@ -2007,50 +2038,13 @@
                     }
                 }
                 
-                // 🔥 CORREZIONE: Se c'è tavolo dal QR, gestisci cambio locale vs cambio tavolo
-                const tableFromQR = getTableFromURL();
-                if (tableFromQR) {
-                    // 🆕 Verifica se è cambiato il locale
-                    if (hasVenueChanged()) {
-                        // Cambio locale: logout e richiedi nuovo login
-                        console.log('🔄 Rilevato cambio locale, logout automatico');
-                        alert('Hai cambiato locale. Effettua il login per continuare.');
-                        logout();
-                        return;
-                    }
-                    
-                    // Stesso locale: cambia solo tavolo
-                    try {
-                        // Se l'utente ha già un tavolo diverso, cambialo
-                        if (currentUser.tableNumber && currentUser.tableNumber !== tableFromQR) {
-                            console.log(`🔄 Cambio tavolo: ${currentUser.tableNumber} → ${tableFromQR}`);
-                        }
-                        
-                        // Assegna il tavolo dal QR automaticamente
-                        await apiCall('/select-table', 'POST', { tavolo: tableFromQR });
-                        
-                        // Aggiorna sessione
-                        currentUser.tableNumber = tableFromQR;
-                        saveSession(currentUser);
-                        
-                        // 🆕 Aggiorna indicatore tavolo
-                        updateTableIndicator();
-                        
-                        // 🆕 Vai alla schermata tavoli attivi
-                        document.getElementById('headerActions').style.display = 'flex';
-                        startBadgePolling();
-                        showOtherTablesScreen();
-                    } catch (error) {
-                        console.error('Errore assegnazione tavolo da QR:', error);
-                        // Se fallisce, mostra schermata scelta tavoli
-                        loadTables();
-                        showScreen('tableScreen');
-                    }
-                } else {
-                    // Nessun QR: mostra schermata scelta tavoli
-                    loadTables();
-                    showScreen('tableScreen');
-                }
+                // Tavolo già assegnato al login - vai direttamente a conversazioni
+                document.getElementById('headerActions').style.display = 'flex';
+                updateTableIndicator();
+                startBadgePolling();
+                startGeoWatch();
+                loadConversations();
+                showScreen('conversationsScreen');
                 
             } catch (error) {
                 alert(error.message || 'PIN non valido');
@@ -2127,15 +2121,20 @@
         }
 
         // 🆕 Mostra schermata tavoli attivi
-        function showOtherTablesScreen() {
-            loadTables();
-            showScreen('tableScreen');
-            
-            // 🆕 PROBLEMA 2: Avvia polling tavoli per aggiornamenti automatici
-            if (tablesCheckInterval) {
-                clearInterval(tablesCheckInterval);
+        function showUsersAtMyTable() {
+            if (currentUser && currentUser.tableNumber) {
+                document.getElementById('currentTableDisplay').textContent = (currentUser.tableNumber || '').replace('tavolo-', '');
+                loadUsers(currentUser.tableNumber);
+                showScreen('usersScreen');
             }
-            tablesCheckInterval = setInterval(() => loadTables(true), 3000); // Ogni 3 secondi (silent)
+        }
+
+        function showOtherTablesScreen() {
+            if (currentUser && currentUser.tableNumber) {
+                showUsersAtMyTable();
+            } else {
+                showConversationsScreen();
+            }
         }
 
         // Seleziona tavolo (ASSEGNAZIONE - usata solo da QR e init)
@@ -3799,50 +3798,9 @@
                     await registerPushSubscription(registration);
                 }
                 
-                // 🆕 Aggiorna indicatore tavolo se presente
                 updateTableIndicator();
-
-                // 🆕 Se entriamo da QR (tavolo in URL), chiedi sempre il segno distintivo prima di continuare
-                const tableFromQR = getTableFromURL();
-                const lastPromptedTable = sessionStorage.getItem('meeq_sign_prompted_for_table');
-                if (tableFromQR && lastPromptedTable !== tableFromQR) {
-                    sessionStorage.setItem('meeq_sign_prompted_for_table', tableFromQR);
-                    await promptDistinctiveSignThenContinue(async () => {
-                        try {
-                            await apiCall('/select-table', 'POST', { tavolo: tableFromQR });
-                            currentUser.tableNumber = tableFromQR;
-                            saveSession(currentUser);
-                            updateTableIndicator();
-                            showOtherTablesScreen();
-                        } catch (error) {
-                            console.error('Errore assegnazione tavolo da QR:', error);
-                            loadTables();
-                            showScreen('tableScreen');
-                        }
-                    });
-                    return;
-                }
-                
-                if (currentUser.tableNumber) {
-                    showOtherTablesScreen();
-                } else {
-                    if (tableFromQR) {
-                        try {
-                            await apiCall('/select-table', 'POST', { tavolo: tableFromQR });
-                            currentUser.tableNumber = tableFromQR;
-                            saveSession(currentUser);
-                            updateTableIndicator();
-                            showOtherTablesScreen();
-                        } catch (error) {
-                            console.error('Errore assegnazione tavolo da QR:', error);
-                            loadTables();
-                            showScreen('tableScreen');
-                        }
-                    } else {
-                        loadTables();
-                        showScreen('tableScreen');
-                    }
-                }
+                loadConversations();
+                showScreen('conversationsScreen');
             } catch (error) {
                 // Token non valido, logout
                 console.log('❌ Token non valido o sessione scaduta:', error);
@@ -3882,19 +3840,12 @@
                 }
                 
                 if (conversationsScreen && !conversationsScreen.classList.contains('hidden')) {
-                    // Se siamo nelle conversazioni, vai ai tavoli invece di chiudere
-                    showOtherTablesScreen();
+                    showUsersAtMyTable();
                     history.pushState({ screen: 'tables' }, '', window.location.href);
                     return;
                 }
                 
-                // Altrimenti, torna alla schermata principale
-                if (currentUser.tableNumber) {
-                    showOtherTablesScreen();
-                } else {
-                    loadTables();
-                    showScreen('tableScreen');
-                }
+                showConversationsScreen();
                 history.pushState({ screen: 'home' }, '', window.location.href);
             }
         });
