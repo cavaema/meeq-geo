@@ -2840,9 +2840,9 @@ app.post('/api/conversations/:conversationId/report', authenticateToken, (req, r
 // API ENDPOINTS - ADMIN
 // ============================================================================
 
-// Admin: lista venues
+// Admin: lista venues (tutti, inclusi disattivati)
 app.get('/api/admin/venues', authenticateAdminJWT, (req, res) => {
-  db.all('SELECT * FROM venues WHERE active = 1 ORDER BY name', [], (err, rows) => {
+  db.all('SELECT * FROM venues ORDER BY name', [], (err, rows) => {
     if (err) return res.status(500).json({ error: 'Errore database' });
     res.json(rows || []);
   });

@@ -38,6 +38,8 @@ const [formData,setFormData]=useState({username:'',password:''});
 const [stats,setStats]=useState({});
 const [users,setUsers]=useState([]);
 const [rooms,setRooms]=useState([]);
+const [venues,setVenues]=useState([]);
+const [venueForm,setVenueForm]=useState(null);
 const [error,setError]=useState('');
 const [loading,setLoading]=useState(false);
 const [resetLoading,setResetLoading]=useState(false);
@@ -59,6 +61,7 @@ setScreen('dashboard');
 loadStats(data.token);
 loadUsers(data.token);
 loadRooms(data.token);
+loadVenues(data.token);
 }else{setError(data.error||'Credenziali non valide');}
 }catch(err){setError('Errore connessione');}
 finally{setLoading(false);}
@@ -77,6 +80,7 @@ setScreen('dashboard');
 loadStats(savedToken);
 loadUsers(savedToken);
 loadRooms(savedToken);
+loadVenues(savedToken);
 }else{
 // Token non valido, rimuovilo
 localStorage.removeItem('meeq_admin_token');
@@ -102,6 +106,14 @@ const res=await fetch(`${API_URL}/admin/users`,{headers:{'Authorization':`Bearer
 const data=await res.json();
 setUsers(data);
 }catch(err){console.error('Errore:',err);}
+};
+
+const loadVenues=async(tkn)=>{
+try{
+const res=await fetch(`${API_URL}/admin/venues`,{headers:{'Authorization':`Bearer ${tkn||token}`}});
+const data=await res.json();
+setVenues(Array.isArray(data)?data:[]);
+}catch(err){console.error('Errore venues:',err);}
 };
 
 const loadRooms=async(tkn)=>{
@@ -137,6 +149,21 @@ setResetMessage('error');
 }finally{
 setResetLoading(false);
 }
+};
+
+const saveVenue=async()=>{
+if(!venueForm||!venueForm.name)return;
+const tkn=token;
+try{
+const body={name:venueForm.name,slug:venueForm.slug||'',logo_url:venueForm.logo_url||'',menu_url:venueForm.menu_url||'',latitude:venueForm.latitude||null,longitude:venueForm.longitude||null,radius_meters:venueForm.radius_meters||80,central_api_key:venueForm.central_api_key||'',active:venueForm.active!==0?1:0};
+if(venueForm.id){
+await fetch(`${API_URL}/admin/venues/${venueForm.id}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':`Bearer ${tkn}`},body:JSON.stringify(body)});
+}else{
+await fetch(`${API_URL}/admin/venues`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${tkn}`},body:JSON.stringify(body)});
+}
+setVenueForm(null);
+loadVenues();
+}catch(err){alert('Errore salvataggio locale');}
 };
 
 const deleteUser=async(userId)=>{
@@ -278,6 +305,54 @@ return(
 <div className="flex justify-between items-center mb-8">
 <h1 className="text-4xl font-black text-white">Dashboard Admin</h1>
 <button onClick={()=>{setToken(null);setScreen('login');localStorage.removeItem('meeq_admin_token');}} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg font-semibold">Logout</button>
+</div>
+
+<div className="bg-white rounded-xl p-6 shadow-lg mb-8">
+<h2 className="text-2xl font-black mb-4" style={{color:'#E91E8C'}}>🏢 Locali</h2>
+{venueForm?(
+<div className="border-2 rounded-lg p-4 mb-4" style={{borderColor:'#E91E8C'}}>
+<h3 className="font-bold mb-3">{venueForm.id?'Modifica':'Nuovo'} locale</h3>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+<input placeholder="Nome *" value={venueForm.name||''} onChange={e=>setVenueForm({...venueForm,name:e.target.value})} className="px-3 py-2 border rounded"/>
+<input placeholder="Slug" value={venueForm.slug||''} onChange={e=>setVenueForm({...venueForm,slug:e.target.value})} className="px-3 py-2 border rounded"/>
+<input placeholder="URL Logo" value={venueForm.logo_url||''} onChange={e=>setVenueForm({...venueForm,logo_url:e.target.value})} className="px-3 py-2 border rounded"/>
+<input placeholder="URL Menù" value={venueForm.menu_url||''} onChange={e=>setVenueForm({...venueForm,menu_url:e.target.value})} className="px-3 py-2 border rounded"/>
+<input placeholder="Latitudine" value={venueForm.latitude||''} onChange={e=>setVenueForm({...venueForm,latitude:e.target.value})} className="px-3 py-2 border rounded"/>
+<input placeholder="Longitudine" value={venueForm.longitude||''} onChange={e=>setVenueForm({...venueForm,longitude:e.target.value})} className="px-3 py-2 border rounded"/>
+<input placeholder="Raggio metri" value={venueForm.radius_meters||80} onChange={e=>setVenueForm({...venueForm,radius_meters:e.target.value})} className="px-3 py-2 border rounded"/>
+<input placeholder="API Key centrale" value={venueForm.central_api_key||''} onChange={e=>setVenueForm({...venueForm,central_api_key:e.target.value})} className="px-3 py-2 border rounded" type="password"/>
+{venueForm.id?<label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={venueForm.active!==0} onChange={e=>setVenueForm({...venueForm,active:e.target.checked?1:0})}/>Attivo</label>:null}
+</div>
+<div className="flex gap-2 mt-3">
+<button onClick={saveVenue} className="px-4 py-2 rounded font-bold text-white" style={{backgroundColor:'#E91E8C'}}>Salva</button>
+<button onClick={()=>setVenueForm(null)} className="px-4 py-2 rounded font-bold bg-gray-200">Annulla</button>
+</div>
+</div>
+):null}
+{venues.length===0?(
+<p className="text-gray-500">Nessun locale. Clicca &quot;Aggiungi locale&quot;.</p>
+):(
+<div className="overflow-x-auto">
+<table className="w-full text-sm">
+<thead><tr className="border-b-2" style={{borderColor:'#E91E8C'}}><th className="text-left p-2 font-bold">Nome</th><th className="text-left p-2 font-bold">Slug</th><th className="text-left p-2 font-bold">Coordinate</th><th className="text-left p-2 font-bold">Azioni</th></tr></thead>
+<tbody>
+{venues.map(v=>(
+<tr key={v.id} className="border-b hover:bg-gray-50">
+<td className="p-2 font-semibold">{v.active===0?<span className="text-gray-400 line-through">{v.name}</span>:v.name}</td>
+<td className="p-2 text-xs">{v.slug||'-'}</td>
+<td className="p-2 text-xs">{v.latitude&&v.longitude?`${v.latitude}, ${v.longitude}`:'-'}</td>
+<td className="p-2"><div className="flex flex-wrap gap-2">
+<a href={`${window.location.origin}/venue/${v.id}`} target="_blank" rel="noopener" className="text-blue-600 hover:underline">Landing</a>
+<a href={`${window.location.origin}/app?venue=${v.id}`} target="_blank" rel="noopener" className="text-green-600 hover:underline">App</a>
+<button type="button" onClick={()=>setVenueForm({id:v.id,name:v.name,slug:v.slug,logo_url:v.logo_url,menu_url:v.menu_url,latitude:v.latitude,longitude:v.longitude,radius_meters:v.radius_meters,central_api_key:v.central_api_key,active:v.active})} className="text-pink-600 hover:underline">Modifica</button>
+</div></td>
+</tr>
+))}
+</tbody>
+</table>
+</div>
+)}
+<button onClick={()=>setVenueForm({name:'',slug:'',logo_url:'',menu_url:'',latitude:'',longitude:'',radius_meters:80,central_api_key:''})} className="mt-3 px-4 py-2 rounded font-bold text-white" style={{backgroundColor:'#E91E8C'}}>+ Aggiungi locale</button>
 </div>
 
 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
