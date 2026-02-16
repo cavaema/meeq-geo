@@ -1364,7 +1364,7 @@
                 tablesCheckInterval = null;
             }
             
-            if (screenId === 'pinScreen' && pinScreenMode === 'pin') {
+            if (screenId === 'pinScreen' && (pinScreenMode === 'pin' || pinScreenMode === 'table_only')) {
                 requestGeoPermissionIfNeeded();
             }
             
@@ -1705,7 +1705,7 @@
         // =========================================================================
         // 🆕 PROMPT SOLO SEGNO DISTINTIVO (stile PIN screen)
         // =========================================================================
-        let pinScreenMode = 'pin'; // 'pin' | 'sign_only'
+        let pinScreenMode = 'pin'; // 'pin' | 'sign_only' | 'table_only'
 
         function setPinScreenMode(mode) {
             pinScreenMode = mode;
@@ -1723,17 +1723,22 @@
                 if (tavoloGroup) tavoloGroup.style.display = 'none';
                 if (pinInput) pinInput.required = false;
                 if (pinTavoloEl) pinTavoloEl.required = false;
+            } else if (mode === 'table_only') {
+                if (pinGroup) pinGroup.style.display = 'none';
+                if (tavoloGroup) tavoloGroup.style.display = '';
+                if (pinInput) pinInput.required = false;
+                if (pinTavoloEl) pinTavoloEl.required = true;
                 if (title) title.textContent = 'Bentornato! 👋';
-                if (paragraph) paragraph.innerHTML = 'Aggiungi (se vuoi) un <strong>segno distintivo</strong> per farti riconoscere.';
+                if (paragraph) paragraph.innerHTML = 'Inserisci il <strong>numero del tavolo</strong> per entrare.';
                 if (submitBtn) submitBtn.textContent = 'Entra';
-                if (changeEmailBtn) changeEmailBtn.style.display = 'none';
+                if (changeEmailBtn) changeEmailBtn.style.display = '';
             } else {
                 if (pinGroup) pinGroup.style.display = '';
                 if (tavoloGroup) tavoloGroup.style.display = '';
                 if (pinInput) pinInput.required = true;
                 if (pinTavoloEl) pinTavoloEl.required = true;
                 if (title) title.textContent = 'Verifica Email 📧';
-                if (paragraph) paragraph.innerHTML = 'Abbiamo inviato un codice PIN a <strong id=\"emailDisplay\"></strong>';
+                if (paragraph) paragraph.innerHTML = 'Abbiamo inviato un codice PIN a <strong id="emailDisplay"></strong>';
                 if (submitBtn) submitBtn.textContent = 'Verifica PIN';
                 if (changeEmailBtn) changeEmailBtn.style.display = '';
             }
@@ -1832,10 +1837,16 @@
                 sessionStorage.setItem('currentEmail', email);
                 
                 if (data.exists) {
-                    // Email già registrata - vai a PIN per re-login
                     document.getElementById('emailDisplay').textContent = email;
+                    const savedEmail = localStorage.getItem('meeq_saved_email');
+                    const savedPin = localStorage.getItem('meeq_saved_pin');
+                    if (savedEmail === email && savedPin) {
+                        setPinScreenMode('table_only');
+                    } else {
+                        setPinScreenMode('pin');
+                        alert('PIN inviato! Controlla la tua email per rientrare.');
+                    }
                     showScreen('pinScreen');
-                    alert('PIN inviato! Controlla la tua email per rientrare.');
                 } else {
                     // Email nuova - vai a registrazione
                     document.getElementById('registerEmailDisplay').textContent = email;
@@ -1963,7 +1974,7 @@
                 return;
             }
             
-            const pin = document.getElementById('pin').value.trim();
+            const pin = (pinScreenMode === 'table_only') ? (localStorage.getItem('meeq_saved_pin') || '') : (document.getElementById('pin').value.trim());
             const tavoloInput = document.getElementById('pinTavolo');
             const tavolo = (tavoloInput && tavoloInput.value) ? tavoloInput.value.trim() : '';
             if (!tavolo) {
@@ -1999,6 +2010,15 @@
                         alert(msg);
                         return;
                     }
+                }
+                if (!pin && pinScreenMode === 'table_only') {
+                    setPinScreenMode('pin');
+                    alert('Sessione scaduta. Inserisci il PIN inviato via email.');
+                    return;
+                }
+                if (!pin) {
+                    alert('Inserisci il PIN');
+                    return;
                 }
                 const data = await apiCall('/verify-pin', 'POST', {
                     venue_id: vid,
@@ -2065,7 +2085,12 @@
                 showScreen('conversationsScreen');
                 
             } catch (error) {
-                alert(error.message || 'PIN non valido');
+                if (pinScreenMode === 'table_only') {
+                    setPinScreenMode('pin');
+                    alert('Sessione scaduta o PIN non valido. Inserisci il PIN inviato via email.');
+                } else {
+                    alert(error.message || 'PIN non valido');
+                }
             }
         });
 
