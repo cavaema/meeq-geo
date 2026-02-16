@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#E91E8C">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Meeq">
+    <title>Benvenuto - Meeq</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .venue-logo {
+            max-width: 180px;
+            max-height: 120px;
+            margin-bottom: 24px;
+            object-fit: contain;
+        }
+        .venue-name {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 32px;
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+        }
+        .tagline {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+        }
+        .btn-row {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+            max-width: 320px;
+        }
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 18px 24px;
+            border-radius: 14px;
+            font-size: 17px;
+            font-weight: 600;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-menu {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        .btn-menu:hover {
+            background: rgba(255,255,255,0.2);
+            box-shadow: 0 4px 20px rgba(255,255,255,0.1);
+        }
+        .btn-meeq {
+            background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+            color: white;
+        }
+        .btn-meeq:hover {
+            box-shadow: 0 8px 30px rgba(233, 30, 140, 0.4);
+        }
+        .btn-meeq:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <img id="venueLogo" class="venue-logo" alt="" style="display: none;">
+    <h1 id="venueName" class="venue-name">Benvenuto</h1>
+    <p class="tagline">Connetti. Scopri. Gioca.</p>
+    <div class="btn-row">
+        <a id="menuBtn" class="btn btn-menu" href="#" target="_blank" rel="noopener" style="display: none;">
+            📋 Accedi al menù
+        </a>
+        <a id="meeqBtn" class="btn btn-meeq" href="/app">💬 Gioca con MEEQ</a>
+    </div>
+    <script>
+        (async function() {
+            try {
+                const r = await fetch('/api/venue');
+                const v = await r.json();
+                document.getElementById('venueName').textContent = v.name || 'Benvenuto';
+                if (v.logo_url) {
+                    const img = document.getElementById('venueLogo');
+                    img.src = v.logo_url;
+                    img.alt = v.name;
+                    img.style.display = 'block';
+                }
+                if (v.menu_url) {
+                    const a = document.getElementById('menuBtn');
+                    a.href = v.menu_url;
+                    a.style.display = 'flex';
+                }
+            } catch (e) {
+                console.warn('Venue config:', e);
+            }
+        })();
+    </script>
+</body>
+</html>

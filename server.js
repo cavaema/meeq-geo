@@ -1,5 +1,5 @@
 // ============================================================================
-// MEEQ SERVER - Versione Completa con Tutte le Modifiche
+// MEEQ-GEO - Fork con landing venue (menù + Gioca MEEQ) e geolocalizzazione
 // ============================================================================
 // - MOD 1: Gender selection con badge colorati
 // - MOD 2: Campo distinctive_sign opzionale
@@ -84,6 +84,44 @@ app.use((req, res, next) => {
   return cors(corsOptions)(req, res, () => res.sendStatus(204));
 });
 
+// ============================================================================
+// VENUE / LANDING (stile meeq-events: logo + Accedi al menù | Gioca con MEEQ)
+// ============================================================================
+const VENUE_NAME = process.env.VENUE_NAME || 'Il nostro locale';
+const VENUE_LOGO_URL = process.env.VENUE_LOGO_URL || ''; // URL immagine logo
+const VENUE_MENU_URL = process.env.VENUE_MENU_URL || ''; // URL PDF menù
+// Geolocalizzazione per disconnessione automatica
+const VENUE_LATITUDE = parseFloat(process.env.VENUE_LATITUDE) || null;
+const VENUE_LONGITUDE = parseFloat(process.env.VENUE_LONGITUDE) || null;
+const VENUE_RADIUS_METERS = parseInt(process.env.VENUE_RADIUS_METERS, 10) || 80;
+const GEO_ENABLED = VENUE_LATITUDE != null && VENUE_LONGITUDE != null;
+
+app.get('/api/venue', (req, res) => {
+  res.json({
+    name: VENUE_NAME,
+    logo_url: VENUE_LOGO_URL,
+    menu_url: VENUE_MENU_URL,
+    geo: GEO_ENABLED ? {
+      latitude: VENUE_LATITUDE,
+      longitude: VENUE_LONGITUDE,
+      radius_meters: VENUE_RADIUS_METERS
+    } : null
+  });
+});
+
+// Landing: /venue e / (entry point da QR o accesso diretto)
+app.get('/venue', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
+
+// App MEEQ (dopo click "Gioca con MEEQ")
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.use(express.static('public'));
 
 // ============================================================================
@@ -92,7 +130,7 @@ app.use(express.static('public'));
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
-    service: 'meeq-local',
+    service: 'meeq-geo',
     time: new Date().toISOString()
   });
 });

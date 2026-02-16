@@ -50,11 +50,12 @@
         }
         
         .header-actions {
+            position: absolute;
+            top: 30px;
+            right: 20px;
             display: flex;
             gap: 10px;
             align-items: center;
-            justify-content: center;
-            margin-top: 18px;
         }
         
         /* Badge solo su pulsante messaggi */
@@ -85,7 +86,7 @@
 
         .header {
             text-align: center;
-            padding: 45px 20px 25px;
+            padding: 30px 0;
             position: sticky;
             top: 0;
             background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
@@ -1013,8 +1014,10 @@
                 height: calc(100vh - 200px);
             }
             
-            /* Indicatore tavolo più piccolo su mobile */
+            /* 🆕 Indicatore tavolo più piccolo su mobile */
             #currentTableIndicator {
+                top: 20px !important;
+                left: 10px !important;
                 padding: 6px 12px !important;
                 font-size: 11px !important;
             }
@@ -1051,12 +1054,14 @@
 <body>
     <!-- Header (mostrato solo in home e liste) -->
     <div id="mainHeader" class="header">
+        <!-- 🆕 Indicatore tavolo a sinistra -->
+        <div id="currentTableIndicator" style="display: none; position: absolute; top: 30px; left: 20px; padding: 8px 16px; background: rgba(255,255,255,0.1); border-radius: 20px; font-size: 13px; font-weight: 600;">
+            🪑 <span id="currentTableNumber">-</span>
+        </div>
+        
         <div class="header-content">
             <div class="logo">Meeq</div>
             <div class="tagline">Connetti. Scopri. Gioca.</div>
-            <div id="currentTableIndicator" style="display: none; margin-top: 8px; padding: 6px 14px; background: rgba(255,255,255,0.1); border-radius: 20px; font-size: 13px; font-weight: 600;">
-                🪑 <span id="currentTableNumber">-</span>
-            </div>
         </div>
         <div class="header-actions" id="headerActions" style="display: none;">
             <button class="icon-btn" id="scanQrBtn" onclick="openQRScanner()" title="Scansiona QR">
@@ -1187,9 +1192,13 @@
         <div id="tableScreen" class="hidden">
             <div class="card">
                 <h2>Tavoli Attivi 🪑</h2>
-                <p style="text-align: center; color: rgba(255,255,255,0.7); margin-bottom: 20px;">
-                    Seleziona un tavolo per vedere chi c'è
+                <p style="text-align: center; color: rgba(255,255,255,0.7); margin-bottom: 16px;">
+                    Seleziona un tavolo o inserisci il numero del tuo tavolo
                 </p>
+                <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="manualTableInput" placeholder="Es: 5" style="flex: 1; min-width: 80px; padding: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: white; font-size: 16px;">
+                    <button type="button" class="btn btn-primary" onclick="submitManualTable()">Conferma tavolo</button>
+                </div>
                 <div id="tablesGrid" class="tables-grid">
                     <!-- Tavoli generati dinamicamente -->
                 </div>
@@ -1312,6 +1321,10 @@
         let onlineInterval = null; // 🆕 Interval per polling utenti online
         let tablesCheckInterval = null; // 🆕 PROBLEMA 2: Interval per polling tavoli
         let heartbeatInterval = null; // 🆕 Interval per heartbeat (mantiene sessione attiva)
+        let geoWatchId = null; // 🆕 Geolocalizzazione per disconnessione automatica
+        let geoOutsideSince = null;
+        let geoCheckInterval = null;
+        let venueGeoConfig = null;
         let currentConversationId = null;
         let currentConversation = null;
         let messageCheckInterval = null;
@@ -2123,7 +2136,7 @@
             if (currentUser && currentUser.tableNumber) {
                 const displayTable = currentUser.tableNumber.replace('tavolo-', 'Tavolo ');
                 tableNumber.textContent = displayTable;
-                indicator.style.display = 'inline-block';
+                indicator.style.display = 'block';
             } else {
                 indicator.style.display = 'none';
             }
@@ -2144,6 +2157,18 @@
             } catch (error) {
                 alert(error.message || 'Errore nella selezione del tavolo');
             }
+        }
+
+        // Inserimento manuale numero tavolo (da landing / stile meeq-events)
+        function submitManualTable() {
+            const input = document.getElementById('manualTableInput');
+            const val = (input && input.value || '').trim();
+            if (!val) {
+                alert('Inserisci il numero del tuo tavolo');
+                return;
+            }
+            const normalized = val.toLowerCase().startsWith('tavolo') ? val : ('tavolo-' + val);
+            selectTable(normalized);
         }
 
         // Carica utenti
@@ -2544,6 +2569,87 @@
                 heartbeatInterval = null;
                 console.log('🛑 Heartbeat fermato');
             }
+        }
+
+        // 🆕 Geolocalizzazione: disconnessione automatica quando esci dal locale
+        const GEO_OUTSIDE_GRACE_MS = 3 * 60 * 1000; // 3 minuti fuori prima di disconnettere
+        const GEO_CHECK_INTERVAL_MS = 45 * 1000; // Controllo ogni 45 secondi
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Raggio Terra in metri
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function startGeoWatch() {
+            if (geoWatchId != null || geoCheckInterval != null) return;
+            if (!currentUser || !currentUser.token) return;
+
+            fetch(`${API_URL}/venue`).then(r => r.json()).then(venue => {
+                if (!venue.geo || !venue.geo.latitude || !venue.geo.longitude) {
+                    console.log('📍 Geolocalizzazione non configurata per questo locale');
+                    return;
+                }
+                venueGeoConfig = venue.geo;
+                const { latitude, longitude, radius_meters } = venueGeoConfig;
+
+                if (!navigator.geolocation) {
+                    console.warn('📍 Geolocalizzazione non supportata dal browser');
+                    return;
+                }
+
+                console.log('📍 Avvio monitoraggio geolocalizzazione (raggio ' + radius_meters + 'm)');
+
+                const onPosition = (position) => {
+                    if (!venueGeoConfig || !currentUser) return;
+                    const dist = haversineDistance(
+                        latitude, longitude,
+                        position.coords.latitude, position.coords.longitude
+                    );
+                    if (dist > radius_meters) {
+                        if (!geoOutsideSince) geoOutsideSince = Date.now();
+                    } else {
+                        geoOutsideSince = null;
+                    }
+                };
+
+                const onError = (err) => {
+                    if (err.code === 1) console.warn('📍 Permesso geolocalizzazione negato');
+                    else if (err.code === 3) console.warn('📍 Timeout geolocalizzazione');
+                };
+
+                geoWatchId = navigator.geolocation.watchPosition(onPosition, onError, {
+                    enableHighAccuracy: true,
+                    maximumAge: 30000,
+                    timeout: 10000
+                });
+
+                geoCheckInterval = setInterval(() => {
+                    if (!venueGeoConfig || !currentUser) return;
+                    if (geoOutsideSince && (Date.now() - geoOutsideSince) >= GEO_OUTSIDE_GRACE_MS) {
+                        console.log('📍 Fuori dal raggio del locale da oltre 3 minuti, disconnessione');
+                        stopGeoWatch();
+                        alert('Sei uscito dal locale. Disconnessione automatica.');
+                        logout();
+                    }
+                }, GEO_CHECK_INTERVAL_MS);
+            }).catch(() => {});
+        }
+
+        function stopGeoWatch() {
+            if (geoWatchId != null && navigator.geolocation) {
+                navigator.geolocation.clearWatch(geoWatchId);
+                geoWatchId = null;
+            }
+            if (geoCheckInterval) {
+                clearInterval(geoCheckInterval);
+                geoCheckInterval = null;
+            }
+            geoOutsideSince = null;
+            venueGeoConfig = null;
         }
 
         // Carica conversazioni
@@ -3323,6 +3429,7 @@
             stopBadgePolling();
             stopOnlinePolling();
             stopHeartbeat();
+            stopGeoWatch();
             
             try {
                 // 🆕 Chiama l'endpoint logout del backend per aggiornare logged_in = 0
@@ -3665,6 +3772,7 @@
                 document.getElementById('headerActions').style.display = 'flex';
                 startBadgePolling();
                 startHeartbeat(); // 🆕 Avvia heartbeat per mantenere sessione attiva
+                startGeoWatch(); // 🆕 Disconnessione automatica quando esci dal locale
                 
                 // 🆕 Registra push subscription dopo login
                 if ('serviceWorker' in navigator) {
@@ -3776,6 +3884,7 @@
             if (messageCheckInterval) clearInterval(messageCheckInterval);
             if (conversationsCheckInterval) clearInterval(conversationsCheckInterval);
             if (conversationStateCheckInterval) clearInterval(conversationStateCheckInterval);
+            stopGeoWatch();
         });
 
         // 🔒 BLOCCO SCREENSHOT - Protezione avanzata
