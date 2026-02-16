@@ -13,10 +13,22 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
 const schedule = require('node-schedule');
+
+// Directory upload menu (PDF)
+const UPLOADS_DIR = path.join(__dirname, 'uploads', 'menus');
+if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
+  fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true });
+}
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  console.log('✅ Cartella uploads/menus creata');
+}
 const { exec } = require('child_process');
 const webpush = require('web-push');
 const cors = require('cors');
@@ -152,6 +164,14 @@ app.get('/l/:slug', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'landing.html'));
 });
 
+// Pagina caricamento menu per titolare del locale
+app.get('/venue/:venueId/upload', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'venue-upload.html'));
+});
+app.get('/l/:slug/upload', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'venue-upload.html'));
+});
+
 // Root: lista locali (per chi arriva senza QR)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'venues-list.html'));
@@ -163,6 +183,7 @@ app.get('/app', (req, res) => {
 });
 
 app.use(express.static('public'));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================================================
 // PUBLIC HEALTHCHECK (utile per PWA centrale / monitor)
@@ -223,6 +244,10 @@ function initDatabase() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migration: colonne titolare locale (per upload menu)
+    db.run(`ALTER TABLE venues ADD COLUMN owner_username TEXT`, () => {});
+    db.run(`ALTER TABLE venues ADD COLUMN owner_password_hash TEXT`, () => {});
 
     // Crea default venue da env se la tabella è vuota
     db.get('SELECT COUNT(*) as c FROM venues', [], (err, row) => {
@@ -628,6 +653,41 @@ function authenticateAdminJWT(req, res, next) {
     }
     req.admin = decoded;
     next();
+  });
+}
+
+// Hash password titolare locale (sha256)
+function hashOwnerPassword(password) {
+  return crypto.createHash('sha256').update(String(password)).digest('hex');
+}
+
+// Middleware: accetta admin JWT O venue owner JWT per quel venue
+function authenticateVenueOwnerOrAdmin(req, res, next) {
+  const venueId = parseInt(req.params.id, 10);
+  if (isNaN(venueId)) return res.status(400).json({ error: 'ID venue non valido' });
+
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Autenticazione richiesta' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(403).json({ error: 'Token non valido' });
+    // Admin può fare tutto
+    if (decoded.isAdmin) {
+      req.authVenueId = venueId;
+      req.isAdmin = true;
+      return next();
+    }
+    // Titolare solo per il proprio venue
+    if (decoded.venueOwnerId === venueId) {
+      req.authVenueId = venueId;
+      req.isAdmin = false;
+      return next();
+    }
+    return res.status(403).json({ error: 'Accesso negato per questo locale' });
   });
 }
 
@@ -2890,6 +2950,78 @@ app.post('/api/conversations/:conversationId/report', authenticateToken, (req, r
 });
 
 // ============================================================================
+// UPLOAD MENU - Admin o Titolare locale
+// ============================================================================
+
+// Login titolare locale (per caricare menu)
+app.post('/api/venue/:id/owner-login', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { username, password } = req.body || {};
+  if (isNaN(id) || !username || !password) {
+    return res.status(400).json({ error: 'Venue ID, username e password obbligatori' });
+  }
+  db.get('SELECT id, owner_username, owner_password_hash FROM venues WHERE id = ? AND active = 1', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: 'Errore database' });
+    if (!row) return res.status(404).json({ error: 'Locale non trovato' });
+    if (!row.owner_username || !row.owner_password_hash) {
+      return res.status(403).json({ error: 'Credenziali titolare non configurate. Contatta l\'amministratore.' });
+    }
+    const hash = hashOwnerPassword(password);
+    if (row.owner_username !== String(username).trim() || row.owner_password_hash !== hash) {
+      return res.status(401).json({ error: 'Credenziali non valide' });
+    }
+    const token = jwt.sign(
+      { venueOwnerId: row.id, isAdmin: false },
+      JWT_SECRET,
+      { expiresIn: '2h' }
+    );
+    res.json({ success: true, token, venueId: row.id });
+  });
+});
+
+// Multer config per upload PDF menu
+const menuUpload = multer({
+  dest: UPLOADS_DIR,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (req, file, cb) => {
+    const ok = /\.pdf$/i.test(file.originalname) || (file.mimetype && file.mimetype === 'application/pdf');
+    if (ok) cb(null, true);
+    else cb(new Error('Solo file PDF consentiti'));
+  }
+});
+
+// Upload menu (admin o titolare)
+app.post('/api/venue/:id/upload-menu', authenticateVenueOwnerOrAdmin, (req, res, next) => {
+  menuUpload.single('menu')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Errore upload file' });
+    next();
+  });
+}, (req, res) => {
+  const venueId = parseInt(req.params.id, 10);
+  if (!req.file) return res.status(400).json({ error: 'Nessun file caricato' });
+
+  const ext = path.extname(req.file.originalname) || '.pdf';
+  const newName = `venue-${venueId}-${Date.now()}${ext}`;
+  const destPath = path.join(UPLOADS_DIR, newName);
+
+  fs.rename(req.file.path, destPath, (err) => {
+    if (err) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(500).json({ error: 'Errore salvataggio file' });
+    }
+    const menuUrl = `/uploads/menus/${newName}`;
+    db.run('UPDATE venues SET menu_url = ? WHERE id = ?', [menuUrl, venueId], function (e) {
+      if (e) {
+        fs.unlink(destPath, () => {});
+        return res.status(500).json({ error: 'Errore aggiornamento database' });
+      }
+      const fullUrl = `${req.protocol}://${req.get('host')}${menuUrl}`;
+      res.json({ success: true, menu_url: menuUrl, menu_url_full: fullUrl });
+    });
+  });
+});
+
+// ============================================================================
 // API ENDPOINTS - ADMIN
 // ============================================================================
 
@@ -2903,13 +3035,15 @@ app.get('/api/admin/venues', authenticateAdminJWT, (req, res) => {
 
 // Admin: crea venue
 app.post('/api/admin/venues', authenticateAdminJWT, (req, res) => {
-  const { name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key } = req.body;
+  const { name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key, owner_username, owner_password } = req.body;
   if (!name) return res.status(400).json({ error: 'Nome obbligatorio' });
   const s = (slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')).slice(0, 50) || 'venue';
+  const ownerHash = (owner_username && owner_password) ? hashOwnerPassword(owner_password) : null;
+  const ownerUser = (owner_username && owner_password) ? String(owner_username).trim() : null;
   db.run(
-    `INSERT INTO venues (name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [name, s, logo_url || '', menu_url || '', latitude ? parseFloat(latitude) : null, longitude ? parseFloat(longitude) : null, radius_meters || 80, central_api_key || ''],
+    `INSERT INTO venues (name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key, owner_username, owner_password_hash) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [name, s, logo_url || '', menu_url || '', latitude ? parseFloat(latitude) : null, longitude ? parseFloat(longitude) : null, radius_meters || 80, central_api_key || '', ownerUser || '', ownerHash || ''],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ success: true, id: this.lastID, slug: s });
@@ -2920,16 +3054,23 @@ app.post('/api/admin/venues', authenticateAdminJWT, (req, res) => {
 // Admin: aggiorna venue
 app.put('/api/admin/venues/:id', authenticateAdminJWT, (req, res) => {
   const id = req.params.id;
-  const { name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key, active } = req.body;
-  db.run(
-    `UPDATE venues SET name = ?, slug = ?, logo_url = ?, menu_url = ?, latitude = ?, longitude = ?, radius_meters = ?, central_api_key = ?, active = ? 
-     WHERE id = ?`,
-    [name || '', slug || '', logo_url || '', menu_url || '', latitude ? parseFloat(latitude) : null, longitude ? parseFloat(longitude) : null, radius_meters || 80, central_api_key || '', active !== 0 ? 1 : 0, id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true });
-    }
-  );
+  const { name, slug, logo_url, menu_url, latitude, longitude, radius_meters, central_api_key, active, owner_username, owner_password } = req.body;
+  db.get('SELECT owner_username, owner_password_hash FROM venues WHERE id = ?', [id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    let ownerUser = row ? row.owner_username : '';
+    let ownerHash = row ? row.owner_password_hash : '';
+    if (owner_username !== undefined) ownerUser = String(owner_username || '').trim();
+    if (owner_password && owner_password.length > 0) ownerHash = hashOwnerPassword(owner_password);
+    db.run(
+      `UPDATE venues SET name = ?, slug = ?, logo_url = ?, menu_url = ?, latitude = ?, longitude = ?, radius_meters = ?, central_api_key = ?, active = ?, owner_username = ?, owner_password_hash = ? 
+       WHERE id = ?`,
+      [name || '', slug || '', logo_url || '', menu_url || '', latitude ? parseFloat(latitude) : null, longitude ? parseFloat(longitude) : null, radius_meters || 80, central_api_key || '', active !== 0 ? 1 : 0, ownerUser || '', ownerHash || '', id],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+      }
+    );
+  });
 });
 
 // Login admin

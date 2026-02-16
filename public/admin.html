@@ -155,7 +155,7 @@ const saveVenue=async()=>{
 if(!venueForm||!venueForm.name)return;
 const tkn=token;
 try{
-const body={name:venueForm.name,slug:venueForm.slug||'',logo_url:venueForm.logo_url||'',menu_url:venueForm.menu_url||'',latitude:venueForm.latitude||null,longitude:venueForm.longitude||null,radius_meters:venueForm.radius_meters||80,central_api_key:venueForm.central_api_key||'',active:venueForm.active!==0?1:0};
+const body={name:venueForm.name,slug:venueForm.slug||'',logo_url:venueForm.logo_url||'',menu_url:venueForm.menu_url||'',latitude:venueForm.latitude||null,longitude:venueForm.longitude||null,radius_meters:venueForm.radius_meters||80,central_api_key:venueForm.central_api_key||'',active:venueForm.active!==0?1:0,owner_username:venueForm.owner_username||'',owner_password:venueForm.owner_password||''};
 if(venueForm.id){
 await fetch(`${API_URL}/admin/venues/${venueForm.id}`,{method:'PUT',headers:{'Content-Type':'application/json','Authorization':`Bearer ${tkn}`},body:JSON.stringify(body)});
 }else{
@@ -164,6 +164,30 @@ await fetch(`${API_URL}/admin/venues`,{method:'POST',headers:{'Content-Type':'ap
 setVenueForm(null);
 loadVenues();
 }catch(err){alert('Errore salvataggio locale');}
+};
+
+let currentUploadVenueId=null;
+const adminMenuInput=document.createElement('input');
+adminMenuInput.type='file';
+adminMenuInput.accept='.pdf,application/pdf';
+adminMenuInput.style.display='none';
+adminMenuInput.onchange=async function(){
+if(!currentUploadVenueId||!this.files||!this.files[0]){currentUploadVenueId=null;this.value='';return;}
+const fd=new FormData();
+fd.append('menu',this.files[0]);
+try{
+const res=await fetch(`${API_URL}/venue/${currentUploadVenueId}/upload-menu`,{method:'POST',headers:{'Authorization':'Bearer '+(localStorage.getItem('meeq_admin_token')||token)},body:fd});
+const data=await res.json();
+if(res.ok&&data.success){alert('Menu caricato con successo');loadVenues();}else{alert(data.error||'Errore upload');}
+}catch(e){alert('Errore: '+e.message);}
+currentUploadVenueId=null;
+this.value='';
+};
+document.body.appendChild(adminMenuInput);
+
+const uploadMenuAdmin=(venue)=>{
+currentUploadVenueId=venue.id;
+adminMenuInput.click();
 };
 
 const printVenueQR=async(venue)=>{
@@ -348,6 +372,8 @@ return(
 <input placeholder="Longitudine" value={venueForm.longitude||''} onChange={e=>setVenueForm({...venueForm,longitude:e.target.value})} className="px-3 py-2 border rounded"/>
 <input placeholder="Raggio metri" value={venueForm.radius_meters||80} onChange={e=>setVenueForm({...venueForm,radius_meters:e.target.value})} className="px-3 py-2 border rounded"/>
 <input placeholder="API Key centrale" value={venueForm.central_api_key||''} onChange={e=>setVenueForm({...venueForm,central_api_key:e.target.value})} className="px-3 py-2 border rounded" type="password"/>
+<input placeholder="Username titolare (per upload menu)" value={venueForm.owner_username||''} onChange={e=>setVenueForm({...venueForm,owner_username:e.target.value})} className="px-3 py-2 border rounded"/>
+<input placeholder="Password titolare (nuova, solo per modificare)" value={venueForm.owner_password||''} onChange={e=>setVenueForm({...venueForm,owner_password:e.target.value})} className="px-3 py-2 border rounded" type="password"/>
 {venueForm.id?<label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={venueForm.active!==0} onChange={e=>setVenueForm({...venueForm,active:e.target.checked?1:0})}/>Attivo</label>:null}
 </div>
 <div className="flex gap-2 mt-3">
@@ -372,7 +398,9 @@ return(
 <a href={`${window.location.origin}/venue/${v.id}`} target="_blank" rel="noopener" className="text-blue-600 hover:underline">Landing</a>
 <a href={`${window.location.origin}/app?venue=${v.id}`} target="_blank" rel="noopener" className="text-green-600 hover:underline">App</a>
 <button type="button" onClick={()=>printVenueQR(v)} className="text-purple-600 hover:underline font-semibold">Stampa QR</button>
-<button type="button" onClick={()=>setVenueForm({id:v.id,name:v.name,slug:v.slug,logo_url:v.logo_url,menu_url:v.menu_url,latitude:v.latitude,longitude:v.longitude,radius_meters:v.radius_meters,central_api_key:v.central_api_key,active:v.active})} className="text-pink-600 hover:underline">Modifica</button>
+<button type="button" onClick={()=>uploadMenuAdmin(v)} className="text-indigo-600 hover:underline">Carica menu</button>
+<a href={`${window.location.origin}/venue/${v.id}/upload`} target="_blank" rel="noopener" className="text-orange-600 hover:underline">Carica menu (titolare)</a>
+<button type="button" onClick={()=>setVenueForm({id:v.id,name:v.name,slug:v.slug,logo_url:v.logo_url,menu_url:v.menu_url,latitude:v.latitude,longitude:v.longitude,radius_meters:v.radius_meters,central_api_key:v.central_api_key,active:v.active,owner_username:v.owner_username||''})} className="text-pink-600 hover:underline">Modifica</button>
 </div></td>
 </tr>
 ))}
@@ -380,7 +408,7 @@ return(
 </table>
 </div>
 )}
-<button onClick={()=>setVenueForm({name:'',slug:'',logo_url:'',menu_url:'',latitude:'',longitude:'',radius_meters:80,central_api_key:''})} className="mt-3 px-4 py-2 rounded font-bold text-white" style={{backgroundColor:'#E91E8C'}}>+ Aggiungi locale</button>
+<button onClick={()=>setVenueForm({name:'',slug:'',logo_url:'',menu_url:'',latitude:'',longitude:'',radius_meters:80,central_api_key:'',owner_username:'',owner_password:''})} className="mt-3 px-4 py-2 rounded font-bold text-white" style={{backgroundColor:'#E91E8C'}}>+ Aggiungi locale</button>
 </div>
 
 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

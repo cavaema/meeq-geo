@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#E91E8C">
+  <title>Carica menu - Meeq</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    h1 { font-family: 'Montserrat', sans-serif; font-weight: 900; font-size: 24px; margin-bottom: 8px; }
+    .venue-name { font-size: 18px; opacity: 0.9; margin-bottom: 24px; }
+    .card {
+      background: rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 28px;
+      width: 100%;
+      max-width: 400px;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; margin-bottom: 6px; opacity: 0.8; }
+    input[type="text"], input[type="password"], input[type="file"] {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: white;
+      font-size: 15px;
+    }
+    input[type="file"] { cursor: pointer; }
+    input::placeholder { color: rgba(255,255,255,0.5); }
+    .btn {
+      width: 100%;
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, #E91E8C 0%, #8B5CF6 100%);
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) { opacity: 0.95; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.15);
+      color: white;
+      margin-top: 12px;
+    }
+    .error { background: rgba(220,53,69,0.3); color: #ffb3b3; padding: 12px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; }
+    .success { background: rgba(40,167,69,0.3); color: #90ee90; padding: 12px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; }
+    .hint { font-size: 12px; opacity: 0.7; margin-top: 8px; }
+    .divider { height: 1px; background: rgba(255,255,255,0.2); margin: 24px 0; }
+    a { color: #E91E8C; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="card">
+      <h1>Carica menu</h1>
+      <p class="venue-name" id="venueName">Caricamento...</p>
+      <div id="loginSection">
+        <p class="hint" style="margin-bottom:16px">Accedi con le credenziali del tuo locale per caricare il menu in PDF.</p>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="username" placeholder="Inserisci username" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" placeholder="Inserisci password" autocomplete="current-password">
+        </div>
+        <div id="loginError" class="error" style="display:none"></div>
+        <button type="button" class="btn btn-primary" id="btnLogin">Accedi</button>
+      </div>
+      <div id="uploadSection" style="display:none">
+        <div class="form-group">
+          <label>Seleziona file PDF del menu</label>
+          <input type="file" id="fileInput" accept=".pdf,application/pdf">
+        </div>
+        <div id="uploadError" class="error" style="display:none"></div>
+        <div id="uploadSuccess" class="success" style="display:none"></div>
+        <button type="button" class="btn btn-primary" id="btnUpload" disabled>Carica menu</button>
+        <button type="button" class="btn btn-secondary" id="btnLogout">Esci</button>
+      </div>
+      <div class="divider"></div>
+      <p class="hint"><a href="/">← Torna alla lista locali</a></p>
+    </div>
+  </div>
+  <script>
+    (function() {
+      const pathParts = window.location.pathname.split('/').filter(Boolean);
+      const isSlug = pathParts[0] === 'l';
+      const venueIdOrSlug = pathParts[1];
+      const API = window.location.origin + '/api';
+
+      let venueId = null;
+      let venueName = '';
+      let token = null;
+
+      const venueNameEl = document.getElementById('venueName');
+      const loginSection = document.getElementById('loginSection');
+      const uploadSection = document.getElementById('uploadSection');
+      const loginError = document.getElementById('loginError');
+      const uploadError = document.getElementById('uploadError');
+      const uploadSuccess = document.getElementById('uploadSuccess');
+      const usernameEl = document.getElementById('username');
+      const passwordEl = document.getElementById('password');
+      const fileInput = document.getElementById('fileInput');
+      const btnLogin = document.getElementById('btnLogin');
+      const btnUpload = document.getElementById('btnUpload');
+      const btnLogout = document.getElementById('btnLogout');
+
+      async function loadVenue() {
+        const url = isSlug
+          ? `${API}/venue/${encodeURIComponent(venueIdOrSlug)}`
+          : `${API}/venue/${venueIdOrSlug}`;
+        try {
+          const res = await fetch(url);
+          if (!res.ok) {
+            venueNameEl.textContent = 'Locale non trovato';
+            return;
+          }
+          const v = await res.json();
+          venueId = v.id;
+          venueName = v.name || 'Il tuo locale';
+          venueNameEl.textContent = venueName;
+        } catch (e) {
+          venueNameEl.textContent = 'Errore caricamento';
+        }
+      }
+
+      async function doLogin() {
+        if (!venueId || !usernameEl.value.trim() || !passwordEl.value) {
+          loginError.style.display = 'block';
+          loginError.textContent = 'Inserisci username e password';
+          return;
+        }
+        loginError.style.display = 'none';
+        btnLogin.disabled = true;
+        btnLogin.textContent = 'Accesso in corso...';
+        try {
+          const res = await fetch(`${API}/venue/${venueId}/owner-login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: usernameEl.value.trim(),
+              password: passwordEl.value
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.token) {
+            token = data.token;
+            loginSection.style.display = 'none';
+            uploadSection.style.display = 'block';
+          } else {
+            loginError.style.display = 'block';
+            loginError.textContent = data.error || 'Credenziali non valide';
+          }
+        } catch (e) {
+          loginError.style.display = 'block';
+          loginError.textContent = 'Errore di connessione';
+        } finally {
+          btnLogin.disabled = false;
+          btnLogin.textContent = 'Accedi';
+        }
+      }
+
+      fileInput.addEventListener('change', function() {
+        btnUpload.disabled = !this.files || this.files.length === 0;
+        uploadError.style.display = 'none';
+        uploadSuccess.style.display = 'none';
+      });
+
+      async function doUpload() {
+        if (!fileInput.files || fileInput.files.length === 0) {
+          uploadError.style.display = 'block';
+          uploadError.textContent = 'Seleziona un file PDF';
+          return;
+        }
+        const file = fileInput.files[0];
+        if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+          uploadError.style.display = 'block';
+          uploadError.textContent = 'Solo file PDF consentiti';
+          return;
+        }
+        uploadError.style.display = 'none';
+        uploadSuccess.style.display = 'none';
+        btnUpload.disabled = true;
+        btnUpload.textContent = 'Caricamento...';
+        const formData = new FormData();
+        formData.append('menu', file);
+        try {
+          const res = await fetch(`${API}/venue/${venueId}/upload-menu`, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token },
+            body: formData
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            uploadSuccess.style.display = 'block';
+            uploadSuccess.textContent = 'Menu caricato con successo! Il menu è ora visibile sulla landing.';
+            fileInput.value = '';
+            btnUpload.disabled = true;
+          } else {
+            uploadError.style.display = 'block';
+            uploadError.textContent = data.error || 'Errore caricamento';
+          }
+        } catch (e) {
+          uploadError.style.display = 'block';
+          uploadError.textContent = 'Errore di connessione';
+        } finally {
+          btnUpload.disabled = !fileInput.files || fileInput.files.length === 0;
+          btnUpload.textContent = 'Carica menu';
+        }
+      }
+
+      function doLogout() {
+        token = null;
+        uploadSection.style.display = 'none';
+        loginSection.style.display = 'block';
+        usernameEl.value = '';
+        passwordEl.value = '';
+        fileInput.value = '';
+        loginError.style.display = 'none';
+        uploadError.style.display = 'none';
+        uploadSuccess.style.display = 'none';
+      }
+
+      btnLogin.addEventListener('click', doLogin);
+      btnUpload.addEventListener('click', doUpload);
+      btnLogout.addEventListener('click', doLogout);
+      passwordEl.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+
+      loadVenue();
+    })();
+  </script>
+</body>
+</html>
