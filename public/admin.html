@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
@@ -190,30 +190,6 @@ currentUploadVenueId=venue.id;
 adminMenuInput.click();
 };
 
-
-let currentLogoVenueId=null;
-const adminLogoInput=document.createElement('input');
-adminLogoInput.type='file';
-adminLogoInput.accept='image/png,image/jpeg,image/jpg,image/webp';
-adminLogoInput.style.display='none';
-adminLogoInput.onchange=async function(){
-if(!currentLogoVenueId||!this.files||!this.files[0]){currentLogoVenueId=null;this.value='';return;}
-const fd=new FormData();
-fd.append('logo',this.files[0]);
-try{
-const res=await fetch(`/venue/`/upload-logo,{method:'POST',headers:{'Authorization':'Bearer '+(localStorage.getItem('meeq_admin_token')||token)},body:fd});
-const data=await res.json();
-if(res.ok&&data.success){alert('Logo caricato con successo');loadVenues();}else{alert(data.error||'Errore upload');}
-}catch(e){alert('Errore: '+e.message);}
-currentLogoVenueId=null;
-this.value='';
-};
-document.body.appendChild(adminLogoInput);
-
-const uploadLogoAdmin=(venue)=>{
-currentLogoVenueId=venue.id;
-adminLogoInput.click();
-};
 const printVenueQR=async(venue)=>{
 const baseURL=window.location.origin;
 const qrURL=baseURL+'/venue/'+(venue.slug||venue.id);
