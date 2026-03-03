@@ -190,6 +190,30 @@ currentUploadVenueId=venue.id;
 adminMenuInput.click();
 };
 
+let currentLogoVenueId=null;
+const adminLogoInput=document.createElement('input');
+adminLogoInput.type='file';
+adminLogoInput.accept='image/png,image/jpeg,image/jpg,image/webp';
+adminLogoInput.style.display='none';
+adminLogoInput.onchange=async function(){
+if(!currentLogoVenueId||!this.files||!this.files[0]){currentLogoVenueId=null;this.value='';return;}
+const fd=new FormData();
+fd.append('logo',this.files[0]);
+try{
+const res=await fetch(`${API_URL}/venue/${currentLogoVenueId}/upload-logo`,{method:'POST',headers:{'Authorization':'Bearer '+(localStorage.getItem('meeq_admin_token')||token)},body:fd});
+const data=await res.json();
+if(res.ok&&data.success){alert('Logo caricato con successo');loadVenues();}else{alert(data.error||'Errore upload');}
+}catch(e){alert('Errore: '+e.message);}
+currentLogoVenueId=null;
+this.value='';
+};
+document.body.appendChild(adminLogoInput);
+
+const uploadLogoAdmin=(venue)=>{
+currentLogoVenueId=venue.id;
+adminLogoInput.click();
+};
+
 const printVenueQR=async(venue)=>{
 const baseURL=window.location.origin;
 const qrURL=baseURL+'/venue/'+(venue.slug||venue.id);
@@ -398,7 +422,6 @@ return(
 <a href={`${window.location.origin}/venue/${v.id}`} target="_blank" rel="noopener" className="text-blue-600 hover:underline">Landing</a>
 <a href={`${window.location.origin}/app?venue=${v.id}`} target="_blank" rel="noopener" className="text-green-600 hover:underline">App</a>
 <button type="button" onClick={()=>printVenueQR(v)} className="text-purple-600 hover:underline font-semibold">Stampa QR</button>
-<button type="button" onClick={()=>uploadLogoAdmin(v)} className="text-amber-600 hover:underline">Carica logo</button>
 <button type="button" onClick={()=>uploadMenuAdmin(v)} className="text-indigo-600 hover:underline">Carica menu</button>
 <a href={`${window.location.origin}/venue/${v.id}/upload`} target="_blank" rel="noopener" className="text-orange-600 hover:underline">Carica menu (titolare)</a>
 <button type="button" onClick={()=>setVenueForm({id:v.id,name:v.name,slug:v.slug,logo_url:v.logo_url,menu_url:v.menu_url,latitude:v.latitude,longitude:v.longitude,radius_meters:v.radius_meters,central_api_key:v.central_api_key,active:v.active,owner_username:v.owner_username||''})} className="text-pink-600 hover:underline">Modifica</button>
