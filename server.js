@@ -20,14 +20,19 @@ const path = require('path');
 const fs = require('fs');
 const schedule = require('node-schedule');
 
-// Directory upload menu (PDF)
+// Directory upload menu (PDF) e logo (immagini)
 const UPLOADS_DIR = path.join(__dirname, 'uploads', 'menus');
+const UPLOADS_LOGO_DIR = path.join(__dirname, 'uploads', 'logos');
 if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
   fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true });
 }
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   console.log('✅ Cartella uploads/menus creata');
+}
+if (!fs.existsSync(UPLOADS_LOGO_DIR)) {
+  fs.mkdirSync(UPLOADS_LOGO_DIR, { recursive: true });
+  console.log('✅ Cartella uploads/logos creata');
 }
 const { exec } = require('child_process');
 const webpush = require('web-push');
