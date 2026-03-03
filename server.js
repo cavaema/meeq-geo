@@ -3021,6 +3021,50 @@ app.post('/api/venue/:id/upload-menu', authenticateVenueOwnerOrAdmin, (req, res,
   });
 });
 
+// Multer config per upload logo (immagini)
+const logoUpload = multer({
+  dest: UPLOADS_LOGO_DIR,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    const ok = /\.(png|jpe?g|webp)$/i.test(file.originalname) ||
+      (file.mimetype && /^image\/(png|jpeg|jpg|webp)$/.test(file.mimetype));
+    if (ok) cb(null, true);
+    else cb(new Error('Solo immagini consentite (PNG, JPG, JPEG, WEBP)'));
+  }
+});
+
+// Upload logo (admin o titolare)
+app.post('/api/venue/:id/upload-logo', authenticateVenueOwnerOrAdmin, (req, res, next) => {
+  logoUpload.single('logo')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Errore upload file' });
+    next();
+  });
+}, (req, res) => {
+  const venueId = parseInt(req.params.id, 10);
+  if (!req.file) return res.status(400).json({ error: 'Nessun file caricato' });
+
+  const ext = path.extname(req.file.originalname) || '.png';
+  const safeExt = /^\.(png|jpe?g|webp)$/i.test(ext) ? ext : '.png';
+  const newName = `venue-${venueId}-${Date.now()}${safeExt}`;
+  const destPath = path.join(UPLOADS_LOGO_DIR, newName);
+
+  fs.rename(req.file.path, destPath, (err) => {
+    if (err) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(500).json({ error: 'Errore salvataggio file' });
+    }
+    const logoUrl = `/uploads/logos/${newName}`;
+    db.run('UPDATE venues SET logo_url = ? WHERE id = ?', [logoUrl, venueId], function (e) {
+      if (e) {
+        fs.unlink(destPath, () => {});
+        return res.status(500).json({ error: 'Errore aggiornamento database' });
+      }
+      const fullUrl = `${req.protocol}://${req.get('host')}${logoUrl}`;
+      res.json({ success: true, logo_url: logoUrl, logo_url_full: fullUrl });
+    });
+  });
+});
+
 // ============================================================================
 // API ENDPOINTS - ADMIN
 // ============================================================================

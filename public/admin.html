@@ -398,6 +398,7 @@ return(
 <a href={`${window.location.origin}/venue/${v.id}`} target="_blank" rel="noopener" className="text-blue-600 hover:underline">Landing</a>
 <a href={`${window.location.origin}/app?venue=${v.id}`} target="_blank" rel="noopener" className="text-green-600 hover:underline">App</a>
 <button type="button" onClick={()=>printVenueQR(v)} className="text-purple-600 hover:underline font-semibold">Stampa QR</button>
+<button type="button" onClick={()=>uploadLogoAdmin(v)} className="text-amber-600 hover:underline">Carica logo</button>
 <button type="button" onClick={()=>uploadMenuAdmin(v)} className="text-indigo-600 hover:underline">Carica menu</button>
 <a href={`${window.location.origin}/venue/${v.id}/upload`} target="_blank" rel="noopener" className="text-orange-600 hover:underline">Carica menu (titolare)</a>
 <button type="button" onClick={()=>setVenueForm({id:v.id,name:v.name,slug:v.slug,logo_url:v.logo_url,menu_url:v.menu_url,latitude:v.latitude,longitude:v.longitude,radius_meters:v.radius_meters,central_api_key:v.central_api_key,active:v.active,owner_username:v.owner_username||''})} className="text-pink-600 hover:underline">Modifica</button>

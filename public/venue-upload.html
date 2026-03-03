@@ -238,6 +238,7 @@
         usernameEl.value = '';
         passwordEl.value = '';
         fileInput.value = '';
+        if (logoInput) logoInput.value = '';
         loginError.style.display = 'none';
         uploadError.style.display = 'none';
         uploadSuccess.style.display = 'none';
@@ -245,6 +246,7 @@
 
       btnLogin.addEventListener('click', doLogin);
       btnUpload.addEventListener('click', doUpload);
+      btnUploadLogo.addEventListener('click', doUploadLogo);
       btnLogout.addEventListener('click', doLogout);
       passwordEl.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
 
